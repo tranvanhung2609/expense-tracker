@@ -19,6 +19,8 @@ jobs:
     name: Build & Release Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
 
     steps:
       - name: Checkout repository
