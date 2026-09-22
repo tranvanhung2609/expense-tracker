@@ -39,9 +39,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
@@ -66,8 +68,7 @@ jobs:
           APK_RAW=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "Tìm thấy file APK gốc: $APK_RAW"
 
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f | sort -V | tail -n 1)
 
           FINAL_APK="ExpenseTracker-${TAG_NAME}.apk"
 
