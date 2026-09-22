@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotificationStore } from '../stores/notificationStore';
+import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
 import { AppNotification, NotificationType } from '../repositories/NotificationRepository';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
@@ -21,8 +22,12 @@ interface NotificationModalProps {
   onClose: () => void;
 }
 
-function getNotifConfig(type: NotificationType, theme: any) {
-  switch (type) {
+function getNotifConfig(item: AppNotification, theme: any) {
+  if (item.actionUrl === 'pending_transactions' || item.title.includes('nháp')) {
+    return { icon: 'clipboard-text-clock-outline', color: '#8B5CF6', bg: '#8B5CF625' };
+  }
+
+  switch (item.type) {
     case 'BUDGET_EXCEEDED':
       return { icon: 'alert-octagon', color: theme.expense, bg: theme.expense + '20' };
     case 'BUDGET_WARNING':
@@ -47,6 +52,18 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
   const handleTapItem = (item: AppNotification) => {
     markAsRead(item.id);
+    if (item.actionUrl === 'pending_transactions') {
+      onClose();
+      const pendingList = usePendingTransactionStore.getState().pendingList;
+      if (pendingList.length > 0) {
+        usePendingTransactionStore.getState().setActiveBannerItem(pendingList[0]);
+      }
+      setTimeout(() => {
+        router.push('/(tabs)');
+      }, 150);
+      return;
+    }
+
     if (item.actionUrl) {
       onClose();
       // Allow modal dismiss animation before navigating
@@ -57,7 +74,7 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
   };
 
   const renderItem = ({ item }: { item: AppNotification }) => {
-    const config = getNotifConfig(item.type, theme);
+    const config = getNotifConfig(item, theme);
 
     return (
       <TouchableOpacity

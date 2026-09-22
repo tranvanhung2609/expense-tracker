@@ -15,6 +15,9 @@ export interface AppThemeColors {
   textTertiary: string;
   textInverse: string;
   inputBackground: string;
+  headerBackground: string;
+  headerCardBackground: string;
+  headerCardBorder: string;
   statusBarStyle: 'dark-content' | 'light-content';
   tabBarBackground: string;
   tabBarBorder: string;
@@ -48,6 +51,9 @@ const DARK_THEME: AppThemeColors = {
   textTertiary: '#64748B',
   textInverse: '#0B0F19',
   inputBackground: '#1A2438',
+  headerBackground: '#0B0F19',
+  headerCardBackground: '#151D30',
+  headerCardBorder: 'rgba(255,255,255,0.08)',
   statusBarStyle: 'light-content',
   tabBarBackground: '#0E1424',
   tabBarBorder: '#1A2438',
@@ -81,6 +87,9 @@ const LIGHT_THEME: AppThemeColors = {
   textTertiary: '#94A3B8',
   textInverse: '#FFFFFF',
   inputBackground: '#F1F5F9',
+  headerBackground: '#E2E8F0',
+  headerCardBackground: '#FFFFFF',
+  headerCardBorder: '#CBD5E1',
   statusBarStyle: 'dark-content',
   tabBarBackground: '#FFFFFF',
   tabBarBorder: '#E2E8F0',

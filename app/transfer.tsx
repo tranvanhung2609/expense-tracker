@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   StatusBar,
   Platform,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { useWalletStore } from '../src/stores/walletStore';
 import { useTransactionStore } from '../src/stores/transactionStore';
 import { useCategoryStore } from '../src/stores/categoryStore';
 import AmountKeypad from '../src/components/AmountKeypad';
+import ConfirmModal, { ConfirmModalProps } from '../src/components/ConfirmModal';
 import { useAppTheme } from '../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../src/constants/theme';
 import { formatVND } from '../src/utils/currency';
@@ -28,16 +28,43 @@ export default function TransferScreen() {
   const { add } = useTransactionStore();
   const { categories } = useCategoryStore();
 
-  const [fromWalletId, setFromWalletId] = useState<string>(wallets[0]?.id ?? '');
-  const [toWalletId, setToWalletId] = useState<string>(wallets[1]?.id ?? wallets[0]?.id ?? '');
+  const initialFrom = wallets[0]?.id ?? '';
+  const initialTo = wallets.find(w => w.id !== initialFrom)?.id ?? '';
+
+  const [fromWalletId, setFromWalletId] = useState<string>(initialFrom);
+  const [toWalletId, setToWalletId] = useState<string>(initialTo);
   const [digits, setDigits] = useState('');
   const [selectingFor, setSelectingFor] = useState<'from' | 'to' | null>(null);
+
+  // Confirm modal state
+  const [modalConfig, setModalConfig] = useState<ConfirmModalProps | null>(null);
+
+  // Safeguard: Ensure fromWalletId and toWalletId are distinct and valid
+  useEffect(() => {
+    if (wallets.length >= 2) {
+      const isFromValid = wallets.some(w => w.id === fromWalletId);
+      const currentFrom = isFromValid ? fromWalletId : (wallets[0]?.id ?? '');
+      if (!isFromValid) {
+        setFromWalletId(currentFrom);
+      }
+
+      const isToValid = wallets.some(w => w.id === toWalletId && w.id !== currentFrom);
+      if (!isToValid) {
+        const nextTo = wallets.find(w => w.id !== currentFrom)?.id ?? '';
+        setToWalletId(nextTo);
+      }
+    }
+  }, [wallets, fromWalletId, toWalletId]);
 
   const fromWallet = wallets.find(w => w.id === fromWalletId);
   const toWallet = wallets.find(w => w.id === toWalletId);
   const cleanedDigits = digits.replace(/\D/g, '');
   const amount = parseInt(cleanedDigits || '0', 10);
-  const canTransfer = amount > 0 && fromWalletId !== toWalletId && Boolean(fromWallet && toWallet);
+  const canTransfer =
+    wallets.length >= 2 &&
+    amount > 0 &&
+    fromWalletId !== toWalletId &&
+    Boolean(fromWallet && toWallet);
 
   const transferCategory =
     categories.find(
@@ -47,6 +74,7 @@ export default function TransferScreen() {
     ) ?? categories[0];
 
   const handleSwap = () => {
+    if (!fromWalletId || !toWalletId || fromWalletId === toWalletId) return;
     setFromWalletId(toWalletId);
     setToWalletId(fromWalletId);
   };
@@ -56,41 +84,114 @@ export default function TransferScreen() {
 
     const balance = fromWallet.balance;
     if (amount > balance) {
-      Alert.alert(
-        'Số dư không đủ',
-        `Ví "${fromWallet.name}" chỉ có ${formatVND(balance)}. Không đủ để chuyển ${formatVND(amount)}.`
-      );
+      setModalConfig({
+        visible: true,
+        title: 'Số dư không đủ',
+        message: `Ví "${fromWallet.name}" hiện có ${formatVND(balance)}. Không đủ để thực hiện chuyển ${formatVND(amount)}.`,
+        type: 'warning',
+        confirmText: 'Đã hiểu',
+        onConfirm: () => setModalConfig(null),
+      });
       return;
     }
 
-    Alert.alert(
-      'Xác nhận chuyển tiền',
-      `Chuyển ${formatVND(amount)}\ntừ "${fromWallet.name}"\nđến "${toWallet.name}"?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Chuyển ngay',
-          onPress: () => {
-            add({
-              amount,
-              type: TRANSACTION_TYPES.TRANSFER,
-              categoryId: transferCategory.id,
-              walletId: fromWalletId,
-              toWalletId: toWalletId,
-              date: new Date().toISOString(),
-              note: `Chuyển từ ${fromWallet.name} → ${toWallet.name}`,
-            });
-            refreshBalances();
-            Alert.alert('✅ Thành công', 'Chuyển tiền thành công!', [
-              { text: 'Xong', onPress: () => router.back() },
-            ]);
+    setModalConfig({
+      visible: true,
+      title: 'Xác nhận chuyển tiền',
+      message: `Chuyển ${formatVND(amount)}\ntừ "${fromWallet.name}"\nđến "${toWallet.name}"?`,
+      type: 'primary',
+      icon: 'swap-horizontal',
+      iconColor: theme.transfer,
+      confirmText: 'Chuyển ngay',
+      cancelText: 'Hủy',
+      onCancel: () => setModalConfig(null),
+      onConfirm: () => {
+        add({
+          amount,
+          type: TRANSACTION_TYPES.TRANSFER,
+          categoryId: transferCategory.id,
+          walletId: fromWalletId,
+          toWalletId: toWalletId,
+          date: new Date().toISOString(),
+          note: `Chuyển từ ${fromWallet.name} → ${toWallet.name}`,
+        });
+        refreshBalances();
+        setModalConfig({
+          visible: true,
+          title: 'Chuyển tiền thành công!',
+          message: `Đã chuyển ${formatVND(amount)} từ "${fromWallet.name}" sang "${toWallet.name}".`,
+          type: 'primary',
+          icon: 'check-circle-outline',
+          iconColor: '#10B981',
+          confirmText: 'Hoàn tất',
+          onConfirm: () => {
+            setModalConfig(null);
+            router.back();
           },
-        },
-      ]
-    );
+        });
+      },
+    });
   };
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 16) + 8;
+
+  // Filter out the other wallet so a single wallet CANNOT appear in both source & destination
+  const selectableWallets = wallets.filter(w => {
+    if (selectingFor === 'from') {
+      return w.id !== toWalletId;
+    }
+    if (selectingFor === 'to') {
+      return w.id !== fromWalletId;
+    }
+    return true;
+  });
+
+  // Empty state if user has fewer than 2 wallets
+  if (wallets.length < 2) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} />
+
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: theme.card,
+              borderBottomColor: theme.border,
+              paddingTop: topPadding,
+            },
+          ]}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>Chuyển tiền giữa các ví</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.emptyStateContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: theme.warning + '18' }]}>
+            <MaterialCommunityIcons name="wallet-plus-outline" size={48} color={theme.warning} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+            Cần ít nhất 2 ví để chuyển tiền
+          </Text>
+          <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Bạn hiện có {wallets.length} ví. Tính năng này cần tối thiểu 2 ví để luân chuyển số dư. Vui lòng tạo thêm ví mới trong mục Quản lý ví.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.createWalletBtn, { backgroundColor: theme.primary }]}
+            onPress={() => router.replace('/(tabs)/wallets')}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="plus-circle" size={20} color="#FFF" />
+            <Text style={styles.createWalletBtnText}>Quản lý ví & Thêm ví mới</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -197,46 +298,33 @@ export default function TransferScreen() {
             <Text style={[styles.walletListTitle, { color: theme.textSecondary }]}>
               {selectingFor === 'from' ? 'CHỌN VÍ NGUỒN' : 'CHỌN VÍ ĐÍCH'}
             </Text>
-            {wallets.map(w => {
-              const isDisabled =
-                (selectingFor === 'from' && w.id === toWalletId) ||
-                (selectingFor === 'to' && w.id === fromWalletId);
-              return (
-                <TouchableOpacity
-                  key={w.id}
-                  style={[
-                    styles.walletListItem,
-                    { backgroundColor: theme.surfaceVariant },
-                    isDisabled && styles.walletListItemDisabled,
-                  ]}
-                  onPress={() => {
-                    if (isDisabled) return;
-                    if (selectingFor === 'from') setFromWalletId(w.id);
-                    else setToWalletId(w.id);
-                    setSelectingFor(null);
-                  }}
-                  disabled={isDisabled}
-                  activeOpacity={0.75}
-                >
-                  <View style={[styles.walletIcon, { backgroundColor: w.color + '18' }]}>
-                    <MaterialCommunityIcons name={w.icon as any} size={20} color={w.color} />
-                  </View>
-                  <View style={styles.walletInfo}>
-                    <Text
-                      style={[
-                        styles.walletName,
-                        { color: isDisabled ? theme.textTertiary : theme.textPrimary },
-                      ]}
-                    >
-                      {w.name}
-                    </Text>
-                    <Text style={[styles.walletBalance, { color: theme.textSecondary }]}>
-                      {formatVND(w.balance)}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+            {selectableWallets.map(w => (
+              <TouchableOpacity
+                key={w.id}
+                style={[
+                  styles.walletListItem,
+                  { backgroundColor: theme.surfaceVariant },
+                ]}
+                onPress={() => {
+                  if (selectingFor === 'from') setFromWalletId(w.id);
+                  else setToWalletId(w.id);
+                  setSelectingFor(null);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.walletIcon, { backgroundColor: w.color + '18' }]}>
+                  <MaterialCommunityIcons name={w.icon as any} size={20} color={w.color} />
+                </View>
+                <View style={styles.walletInfo}>
+                  <Text style={[styles.walletName, { color: theme.textPrimary }]}>
+                    {w.name}
+                  </Text>
+                  <Text style={[styles.walletBalance, { color: theme.textSecondary }]}>
+                    {formatVND(w.balance)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
             <TouchableOpacity
               style={[styles.cancelSelect, { borderTopColor: theme.divider }]}
               onPress={() => setSelectingFor(null)}
@@ -276,6 +364,9 @@ export default function TransferScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Custom Confirm & Alert Modal */}
+      {modalConfig && <ConfirmModal {...modalConfig} />}
     </View>
   );
 }
@@ -355,7 +446,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     marginBottom: 4,
   },
-  walletListItemDisabled: { opacity: 0.35 },
   cancelSelect: {
     alignItems: 'center',
     padding: SPACING.md,
@@ -387,4 +477,44 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   transferBtnText: { fontSize: 15, color: '#FFF', fontWeight: '700' },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.lg,
+  },
+  emptyTitle: {
+    ...TYPOGRAPHY.h3,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+  },
+  emptySubtitle: {
+    ...TYPOGRAPHY.body,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: SPACING.xl,
+  },
+  createWalletBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: RADIUS.lg,
+    elevation: 3,
+  },
+  createWalletBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

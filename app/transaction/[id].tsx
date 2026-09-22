@@ -20,6 +20,7 @@ import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
 import { formatVND } from '../../src/utils/currency';
 import { formatDateShort, formatTime } from '../../src/utils/date';
 import EditTransactionModal from '../../src/components/EditTransactionModal';
+import ConfirmModal from '../../src/components/ConfirmModal';
 
 const txRepo = new TransactionRepository();
 
@@ -29,23 +30,20 @@ export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { remove } = useTransactionStore();
   const { refreshBalances } = useWalletStore();
-
-  const [currentTx, setCurrentTx] = useState<TransactionWithDetails | null>(
-    () => (id ? (txRepo.getById(id) as TransactionWithDetails | null) : null)
-  );
+  const [currentTx, setCurrentTx] = useState<TransactionWithDetails | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (id) {
-      setCurrentTx(txRepo.getById(id) as TransactionWithDetails | null);
+      const found = txRepo.getById(id);
+      setCurrentTx(found as TransactionWithDetails);
     }
   }, [id]);
 
-  const tx = currentTx;
-
   const headerTopPadding = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 16) + 8;
 
-  if (!tx) {
+  if (!currentTx) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background, paddingTop: headerTopPadding }]}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: SPACING.md }}>
@@ -58,6 +56,8 @@ export default function TransactionDetailScreen() {
     );
   }
 
+  const tx = currentTx;
+
   const isExpense = tx.type === 'EXPENSE';
   const isTransfer = tx.type === 'TRANSFER';
   const accentColor = isTransfer ? theme.transfer : isExpense ? theme.expense : theme.income;
@@ -65,22 +65,14 @@ export default function TransactionDetailScreen() {
   const amountPrefix = isExpense ? '-' : isTransfer ? '↕' : '+';
 
   const handleDelete = () => {
-    Alert.alert(
-      'Xóa giao dịch',
-      'Bạn có chắc muốn xóa giao dịch này không?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: () => {
-            remove(id);
-            refreshBalances();
-            router.back();
-          },
-        },
-      ]
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    setShowDeleteConfirm(false);
+    remove(id);
+    refreshBalances();
+    router.back();
   };
 
   return (
@@ -149,6 +141,18 @@ export default function TransactionDetailScreen() {
           const updated = txRepo.getById(id);
           setCurrentTx(updated as TransactionWithDetails);
         }}
+      />
+
+      {/* Themed Confirmation Modal */}
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Xóa giao dịch"
+        message="Bạn có chắc chắn muốn xóa giao dịch này không? Số dư ví sẽ tự động được hoàn lại tương ứng."
+        type="destructive"
+        confirmText="Xóa giao dịch"
+        cancelText="Hủy"
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </View>
   );

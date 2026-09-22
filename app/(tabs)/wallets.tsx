@@ -8,6 +8,7 @@ import {
   StatusBar,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
 import { formatVND } from '../../src/utils/currency';
 import WalletModal from '../../src/components/WalletModal';
+import ConfirmModal from '../../src/components/ConfirmModal';
 
 export default function WalletsScreen() {
   const theme = useAppTheme();
@@ -27,6 +29,16 @@ export default function WalletsScreen() {
   const { isBalanceHidden } = useSettingsStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingWallet, setEditingWallet] = useState<WalletWithBalance | null>(null);
+  const [selectedWalletOptions, setSelectedWalletOptions] = useState<WalletWithBalance | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'destructive' | 'warning' | 'primary' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
@@ -41,50 +53,44 @@ export default function WalletsScreen() {
   };
 
   const handleWalletOptions = (wallet: WalletWithBalance) => {
-    Alert.alert(
-      wallet.name,
-      `Số dư hiện tại: ${formatVND(wallet.balance)}`,
-      [
-        { text: 'Chuyển tiền từ ví này', onPress: () => router.push('/transfer') },
-        { text: 'Chỉnh sửa ví', onPress: () => handleEdit(wallet) },
-        {
-          text: 'Xóa ví',
-          style: 'destructive',
-          onPress: () => {
-            if (wallets.length <= 1) {
-              Alert.alert('Không thể xóa', 'Bạn cần giữ ít nhất 1 ví trong hệ thống.');
-              return;
-            }
-            Alert.alert(
-              'Xác nhận xóa ví',
-              `Xóa ví "${wallet.name}"? Các giao dịch liên quan vẫn được lưu giữ.`,
-              [
-                { text: 'Hủy', style: 'cancel' },
-                { text: 'Xóa', style: 'destructive', onPress: () => remove(wallet.id) },
-              ]
-            );
-          },
-        },
-        { text: 'Đóng', style: 'cancel' },
-      ]
-    );
+    setSelectedWalletOptions(wallet);
   };
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 16) + 8;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.headerBackground}
+      />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: topPadding,
+            backgroundColor: theme.headerBackground,
+            borderBottomColor: theme.isDark ? 'transparent' : '#CBD5E1',
+            borderBottomWidth: theme.isDark ? 0 : 1,
+          },
+        ]}
+      >
         <View style={styles.topRow}>
           <View>
-            <Text style={styles.screenTitle}>Ví & Tài khoản</Text>
-            <Text style={styles.walletCount}>{wallets.length} nguồn tiền khả dụng</Text>
+            <Text style={[styles.screenTitle, { color: theme.isDark ? '#FFF' : '#0F172A' }]}>Ví & Tài khoản</Text>
+            <Text style={[styles.walletCount, { color: theme.isDark ? 'rgba(255,255,255,0.6)' : '#64748B' }]}>
+              {wallets.length} nguồn tiền khả dụng
+            </Text>
           </View>
           <TouchableOpacity
-            style={styles.addHeaderBtn}
+            style={[
+              styles.addHeaderBtn,
+              {
+                backgroundColor: theme.isDark ? 'rgba(255,255,255,0.15)' : theme.primary,
+              },
+            ]}
             onPress={handleCreate}
             activeOpacity={0.8}
           >
@@ -94,18 +100,46 @@ export default function WalletsScreen() {
         </View>
 
         {/* Total Card */}
-        <View style={styles.totalCard}>
+        <View
+          style={[
+            styles.totalCard,
+            {
+              backgroundColor: theme.headerCardBackground,
+              borderColor: theme.headerCardBorder,
+              shadowOpacity: theme.isDark ? 0.25 : 0.08,
+              elevation: 4,
+            },
+          ]}
+        >
           <View style={styles.totalCardTop}>
             <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
-            <Text style={styles.totalLabel}>TỔNG TÀI SẢN</Text>
+            <Text
+              style={[
+                styles.totalLabel,
+                { color: theme.isDark ? 'rgba(255,255,255,0.7)' : '#64748B' },
+              ]}
+            >
+              TỔNG TÀI SẢN
+            </Text>
           </View>
-          <Text style={styles.totalAmount} numberOfLines={1} adjustsFontSizeToFit>
+          <Text
+            style={[styles.totalAmount, { color: theme.isDark ? '#FFF' : '#0F172A' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {isBalanceHidden ? '•••••••• ₫' : formatVND(totalBalance)}
           </Text>
 
           {/* Asset distribution micro bar */}
           {wallets.length > 0 && totalBalance > 0 && (
-            <View style={styles.distBarWrapper}>
+            <View
+              style={[
+                styles.distBarWrapper,
+                {
+                  backgroundColor: theme.isDark ? 'rgba(255,255,255,0.08)' : theme.border,
+                },
+              ]}
+            >
               {wallets.map(w => {
                 const pct = Math.max(Math.round((Math.max(w.balance, 0) / totalBalance) * 100), 2);
                 return (
@@ -218,6 +252,175 @@ export default function WalletsScreen() {
         <MaterialCommunityIcons name="plus" size={28} color="#FFF" />
       </TouchableOpacity>
 
+      {/* Custom Wallet Actions Action Sheet Modal */}
+      <Modal
+        visible={!!selectedWalletOptions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedWalletOptions(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setSelectedWalletOptions(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.actionSheetCard,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {/* Sheet Handle */}
+            <View style={[styles.sheetHandle, { backgroundColor: theme.divider }]} />
+
+            {/* Wallet Info Header */}
+            {selectedWalletOptions && (
+              <View style={styles.sheetWalletHeader}>
+                <View
+                  style={[
+                    styles.sheetIconCircle,
+                    { backgroundColor: (selectedWalletOptions.color || theme.primary) + '22' },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={(selectedWalletOptions.icon as any) || 'wallet'}
+                    size={28}
+                    color={selectedWalletOptions.color || theme.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetWalletName, { color: theme.textPrimary }]}>
+                    {selectedWalletOptions.name}
+                  </Text>
+                  <Text style={[styles.sheetWalletBalance, { color: theme.textSecondary }]}>
+                    Số dư: <Text style={{ fontWeight: '700', color: theme.primary }}>{formatVND(selectedWalletOptions.balance)}</Text>
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.sheetCloseIconBtn, { backgroundColor: theme.surfaceVariant }]}
+                  onPress={() => setSelectedWalletOptions(null)}
+                >
+                  <MaterialCommunityIcons name="close" size={18} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={[styles.sheetDivider, { backgroundColor: theme.divider }]} />
+
+            {/* Action Items List */}
+            <View style={styles.sheetActionList}>
+              <TouchableOpacity
+                style={[styles.sheetActionRow, { backgroundColor: theme.surfaceVariant }]}
+                onPress={() => {
+                  setSelectedWalletOptions(null);
+                  router.push('/transfer');
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#3B82F620' }]}>
+                  <MaterialCommunityIcons name="swap-horizontal" size={20} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetActionTitle, { color: theme.textPrimary }]}>
+                    Chuyển tiền từ ví này
+                  </Text>
+                  <Text style={[styles.sheetActionSub, { color: theme.textSecondary }]}>
+                    Chuyển số dư sang ví hoặc tài khoản khác
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetActionRow, { backgroundColor: theme.surfaceVariant }]}
+                onPress={() => {
+                  const w = selectedWalletOptions;
+                  setSelectedWalletOptions(null);
+                  if (w) handleEdit(w);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#8B5CF620' }]}>
+                  <MaterialCommunityIcons name="pencil-outline" size={20} color="#8B5CF6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetActionTitle, { color: theme.textPrimary }]}>
+                    Chỉnh sửa ví
+                  </Text>
+                  <Text style={[styles.sheetActionSub, { color: theme.textSecondary }]}>
+                    Đổi tên, màu sắc hoặc hạn mức
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetActionRow, { backgroundColor: '#F43F5E12' }]}
+                onPress={() => {
+                  const w = selectedWalletOptions;
+                  setSelectedWalletOptions(null);
+                  if (w) {
+                    if (wallets.length <= 1) {
+                      setConfirmConfig({
+                        visible: true,
+                        title: 'Không thể xóa ví',
+                        message: 'Bạn cần giữ ít nhất 1 nguồn tiền trong hệ thống để quản lý chi tiêu.',
+                        type: 'warning',
+                        confirmText: 'Đã hiểu',
+                        cancelText: undefined,
+                        onConfirm: () => setConfirmConfig(null),
+                      });
+                      return;
+                    }
+                    setConfirmConfig({
+                      visible: true,
+                      title: 'Xác nhận xóa ví',
+                      message: `Xóa ví "${w.name}"? Toàn bộ giao dịch liên quan đến ví này vẫn sẽ được lưu trữ an toàn.`,
+                      type: 'destructive',
+                      confirmText: 'Xóa ví',
+                      cancelText: 'Hủy',
+                      onConfirm: () => {
+                        remove(w.id);
+                        setConfirmConfig(null);
+                      },
+                    });
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#F43F5E25' }]}>
+                  <MaterialCommunityIcons name="trash-can-outline" size={20} color="#F43F5E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetActionTitle, { color: '#F43F5E', fontWeight: '700' }]}>
+                    Xóa ví này
+                  </Text>
+                  <Text style={[styles.sheetActionSub, { color: theme.textSecondary }]}>
+                    Gỡ bỏ ví khỏi danh sách quản lý
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color="#F43F5E" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Clear Dismiss Button */}
+            <TouchableOpacity
+              style={[styles.sheetDismissBtn, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}
+              onPress={() => setSelectedWalletOptions(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.sheetDismissBtnText, { color: theme.textPrimary }]}>
+                Đóng
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Add / Edit Wallet Modal */}
       <WalletModal
         visible={modalVisible}
@@ -227,6 +430,20 @@ export default function WalletsScreen() {
         }}
         wallet={editingWallet}
       />
+
+      {/* Themed Confirmation Modal */}
+      {confirmConfig && (
+        <ConfirmModal
+          visible={confirmConfig.visible}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          type={confirmConfig.type}
+          confirmText={confirmConfig.confirmText}
+          cancelText={confirmConfig.cancelText}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={() => setConfirmConfig(null)}
+        />
+      )}
     </View>
   );
 }
@@ -436,5 +653,99 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetCard: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingBottom: 28,
+    paddingHorizontal: SPACING.lg,
+    borderTopWidth: 1,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetWalletHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sheetIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetWalletName: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  sheetWalletBalance: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  sheetCloseIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetDivider: {
+    height: 1,
+    marginVertical: 16,
+  },
+  sheetActionList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: RADIUS.lg,
+  },
+  sheetActionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sheetActionSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  sheetDismissBtn: {
+    height: 46,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetDismissBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

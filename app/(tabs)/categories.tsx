@@ -19,29 +19,36 @@ import { useCategoryStore } from '../../src/stores/categoryStore';
 import { Category } from '../../src/repositories/CategoryRepository';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
+import ConfirmModal from '../../src/components/ConfirmModal';
 
 // Icon options for category creation
 const ICON_OPTIONS = [
   'food', 'car', 'shopping', 'home', 'heart-pulse', 'school', 'gamepad-variant',
-  'receipt', 'coffee', 'tshirt-crew', 'airplane', 'paw', 'lipstick', 'dumbbell',
-  'laptop', 'gift', 'cash', 'briefcase', 'chart-line', 'star-circle', 'music',
-  'book', 'camera', 'bicycle', 'bus', 'phone', 'pill', 'baby-carriage',
-  'glass-cocktail', 'silverware-fork-knife', 'cart', 'hammer-wrench', 'flower', 'dog',
+  'tshirt-crew', 'airplane', 'cash-plus', 'briefcase', 'gift', 'coffee',
+  'movie', 'book', 'basketball', 'gas-station', 'medical-bag', 'paw',
+  'chart-line', 'credit-card', 'bank', 'dots-horizontal',
 ];
 
 const COLOR_OPTIONS = [
-  '#FF6B6B', '#FF8E53', '#FFA940', '#FFD700', '#A8E063',
-  '#56CCF2', '#6C63FF', '#C471ED', '#F64F59', '#43E97B',
-  '#FA8231', '#26C6DA', '#AB47BC', '#42A5F5', '#EF5350',
-  '#66BB6A', '#FFA726', '#7E57C2', '#26A69A', '#EC407A',
+  '#F43F5E', '#FB923C', '#F59E0B', '#10B981', '#06B6D4',
+  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#64748B',
 ];
 
 export default function CategoriesScreen() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { categories, load, remove } = useCategoryStore();
-  const [showAddModal, setShowAddModal] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'EXPENSE' | 'INCOME'>('ALL');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'destructive' | 'warning' | 'primary' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
@@ -52,21 +59,29 @@ export default function CategoriesScreen() {
 
   const handleDelete = (cat: Category) => {
     if (cat.isDefault) {
-      Alert.alert('Không thể xóa', 'Không thể xóa danh mục mặc định của hệ thống.');
+      setConfirmConfig({
+        visible: true,
+        title: 'Danh mục mặc định',
+        message: `"${cat.name}" là danh mục mặc định của hệ thống, không thể xóa để đảm bảo thống kê dữ liệu chuẩn xác.`,
+        type: 'info',
+        confirmText: 'Đã hiểu',
+        cancelText: undefined,
+        onConfirm: () => setConfirmConfig(null),
+      });
       return;
     }
-    Alert.alert(
-      'Xóa danh mục',
-      `Xóa danh mục "${cat.name}"? Giao dịch liên quan sẽ không bị xóa.`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: () => { remove(cat.id); },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      title: 'Xóa danh mục',
+      message: `Bạn có chắc muốn xóa danh mục "${cat.name}"? Toàn bộ các giao dịch liên quan trước đó vẫn sẽ được lưu giữ.`,
+      type: 'destructive',
+      confirmText: 'Xóa danh mục',
+      cancelText: 'Hủy',
+      onConfirm: () => {
+        remove(cat.id);
+        setConfirmConfig(null);
+      },
+    });
   };
 
   return (
@@ -137,6 +152,7 @@ export default function CategoriesScreen() {
                 borderColor: theme.border,
               },
             ]}
+            onPress={() => handleDelete(item)}
             onLongPress={() => handleDelete(item)}
             activeOpacity={0.8}
           >
@@ -191,6 +207,20 @@ export default function CategoriesScreen() {
             setShowAddModal(false);
             load();
           }}
+        />
+      )}
+
+      {/* Themed Confirmation Modal */}
+      {confirmConfig && (
+        <ConfirmModal
+          visible={confirmConfig.visible}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          type={confirmConfig.type}
+          confirmText={confirmConfig.confirmText}
+          cancelText={confirmConfig.cancelText}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={() => setConfirmConfig(null)}
         />
       )}
     </View>

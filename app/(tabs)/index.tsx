@@ -16,10 +16,12 @@ import { useTransactionStore } from '../../src/stores/transactionStore';
 import { useWalletStore } from '../../src/stores/walletStore';
 import { useNotificationStore } from '../../src/stores/notificationStore';
 import { useSettingsStore } from '../../src/stores/settingsStore';
+import { usePendingTransactionStore } from '../../src/stores/pendingTransactionStore';
 import TransactionItem from '../../src/components/TransactionItem';
 import QuickAddModal from '../../src/components/QuickAddModal';
 import NotificationModal from '../../src/components/NotificationModal';
-import UserGuideModal from '../../src/components/UserGuideModal';
+import PendingTransactionsCard from '../../src/components/PendingTransactionsCard';
+import PrivacyModal from '../../src/components/PrivacyModal';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
 import { formatVND, formatCompact } from '../../src/utils/currency';
@@ -35,14 +37,21 @@ export default function DashboardScreen() {
   const { transactions, loadAll } = useTransactionStore();
   const { totalBalance, refreshBalances } = useWalletStore();
   const { unreadCount, load: loadNotifs } = useNotificationStore();
-  const { isBalanceHidden, toggleBalanceHidden, isQuickGuideDismissed, dismissQuickGuide } = useSettingsStore();
+  const { isBalanceHidden, toggleBalanceHidden, hasAcceptedPrivacyPolicy, acceptPrivacyPolicy, isOnboardingDone } = useSettingsStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
-  const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showMandatoryPrivacy, setShowMandatoryPrivacy] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
+
+  // Check mandatory privacy consent after onboarding
+  React.useEffect(() => {
+    if (isOnboardingDone() && !hasAcceptedPrivacyPolicy) {
+      setShowMandatoryPrivacy(true);
+    }
+  }, [hasAcceptedPrivacyPolicy]);
 
   // Focus effect to load fresh data
   useFocusEffect(
@@ -50,6 +59,8 @@ export default function DashboardScreen() {
       loadAll();
       refreshBalances();
       loadNotifs();
+      usePendingTransactionStore.getState().loadPending();
+      useNotificationStore.getState().checkPendingTransactionsAlert();
     }, [loadAll, refreshBalances, loadNotifs])
   );
 
@@ -119,11 +130,34 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.headerBackground}
+      />
 
       {/* Fintech Banking Hero Card */}
-      <View style={[styles.heroWrapper, { paddingTop: headerTopPadding }]}>
-        <View style={styles.heroCard}>
+      <View
+        style={[
+          styles.heroWrapper,
+          {
+            paddingTop: headerTopPadding,
+            backgroundColor: theme.headerBackground,
+            borderBottomColor: theme.isDark ? 'transparent' : '#CBD5E1',
+            borderBottomWidth: theme.isDark ? 0 : 1,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: theme.headerCardBackground,
+              borderColor: theme.headerCardBorder,
+              shadowOpacity: theme.isDark ? 0.3 : 0.08,
+              elevation: 4,
+            },
+          ]}
+        >
           {/* Top Row: Label + Eye Mask + Notification */}
           <View style={styles.cardHeaderRow}>
             <TouchableOpacity
@@ -132,20 +166,40 @@ export default function DashboardScreen() {
               activeOpacity={0.7}
             >
               <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
-              <Text style={styles.cardHeaderTitle}>TỔNG SỐ DƯ KHẢ DỤNG</Text>
+              <Text
+                style={[
+                  styles.cardHeaderTitle,
+                  { color: theme.isDark ? 'rgba(255,255,255,0.7)' : '#64748B' },
+                ]}
+              >
+                TỔNG SỐ DƯ KHẢ DỤNG
+              </Text>
               <MaterialCommunityIcons
                 name={isBalanceHidden ? 'eye-off-outline' : 'eye-outline'}
                 size={16}
-                color="rgba(255,255,255,0.7)"
+                color={theme.isDark ? 'rgba(255,255,255,0.7)' : '#94A3B8'}
               />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.notifBtn}
+              style={[
+                styles.notifBtn,
+                {
+                  backgroundColor: theme.isDark
+                    ? 'rgba(255,255,255,0.1)'
+                    : '#FFFFFF',
+                  borderColor: theme.isDark ? 'transparent' : '#CBD5E1',
+                  borderWidth: 1,
+                },
+              ]}
               onPress={() => setShowNotifModal(true)}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="bell-outline" size={20} color="#FFF" />
+              <MaterialCommunityIcons
+                name="bell-outline"
+                size={20}
+                color={theme.isDark ? '#FFF' : '#1E293B'}
+              />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
                   <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -155,32 +209,65 @@ export default function DashboardScreen() {
           </View>
 
           {/* Balance Big Figure */}
-          <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
+          <Text
+            style={[styles.balanceAmount, { color: theme.isDark ? '#FFF' : '#0F172A' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {isBalanceHidden ? '•••••••• ₫' : formatVND(totalBalance)}
           </Text>
 
           {/* Monthly Cashflow Pill (Income & Expense) */}
-          <View style={styles.monthCashflow}>
+          <View
+            style={[
+              styles.monthCashflow,
+              {
+                backgroundColor: theme.isDark ? 'rgba(0,0,0,0.25)' : '#F8FAFC',
+                borderColor: theme.isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0',
+              },
+            ]}
+          >
             <View style={styles.cashflowItem}>
-              <View style={[styles.cashflowIconBg, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+              <View style={[styles.cashflowIconBg, { backgroundColor: 'rgba(16, 185, 129, 0.18)' }]}>
                 <MaterialCommunityIcons name="arrow-down-bold" size={13} color="#10B981" />
               </View>
               <View>
-                <Text style={styles.cashflowLabel}>Thu tháng này</Text>
+                <Text
+                  style={[
+                    styles.cashflowLabel,
+                    { color: theme.isDark ? 'rgba(255,255,255,0.6)' : theme.textSecondary },
+                  ]}
+                >
+                  Thu tháng này
+                </Text>
                 <Text style={[styles.cashflowValue, { color: '#10B981' }]}>
                   {isBalanceHidden ? '••••••' : `+${formatCompact(monthlyIncome)}`}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.cashflowDivider} />
+            <View
+              style={[
+                styles.cashflowDivider,
+                {
+                  backgroundColor: theme.isDark ? 'rgba(255,255,255,0.1)' : theme.divider,
+                },
+              ]}
+            />
 
             <View style={styles.cashflowItem}>
-              <View style={[styles.cashflowIconBg, { backgroundColor: 'rgba(244, 63, 94, 0.2)' }]}>
+              <View style={[styles.cashflowIconBg, { backgroundColor: 'rgba(244, 63, 94, 0.18)' }]}>
                 <MaterialCommunityIcons name="arrow-up-bold" size={13} color="#F43F5E" />
               </View>
               <View>
-                <Text style={styles.cashflowLabel}>Chi tháng này</Text>
+                <Text
+                  style={[
+                    styles.cashflowLabel,
+                    { color: theme.isDark ? 'rgba(255,255,255,0.6)' : theme.textSecondary },
+                  ]}
+                >
+                  Chi tháng này
+                </Text>
                 <Text style={[styles.cashflowValue, { color: '#F43F5E' }]}>
                   {isBalanceHidden ? '••••••' : `-${formatCompact(monthlyExpense)}`}
                 </Text>
@@ -199,7 +286,14 @@ export default function DashboardScreen() {
             <View style={[styles.quickActionIcon, { backgroundColor: theme.primary }]}>
               <MaterialCommunityIcons name="plus" size={20} color="#FFF" />
             </View>
-            <Text style={styles.quickActionLabel}>Ghi chép</Text>
+            <Text
+              style={[
+                styles.quickActionLabel,
+                { color: theme.isDark ? 'rgba(255,255,255,0.85)' : theme.textPrimary },
+              ]}
+            >
+              Ghi chép
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -210,7 +304,14 @@ export default function DashboardScreen() {
             <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(245, 158, 11, 0.9)' }]}>
               <MaterialCommunityIcons name="swap-horizontal" size={20} color="#FFF" />
             </View>
-            <Text style={styles.quickActionLabel}>Chuyển tiền</Text>
+            <Text
+              style={[
+                styles.quickActionLabel,
+                { color: theme.isDark ? 'rgba(255,255,255,0.85)' : theme.textPrimary },
+              ]}
+            >
+              Chuyển tiền
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -221,7 +322,14 @@ export default function DashboardScreen() {
             <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(6, 182, 212, 0.9)' }]}>
               <MaterialCommunityIcons name="chart-pie" size={20} color="#FFF" />
             </View>
-            <Text style={styles.quickActionLabel}>Thống kê</Text>
+            <Text
+              style={[
+                styles.quickActionLabel,
+                { color: theme.isDark ? 'rgba(255,255,255,0.85)' : theme.textPrimary },
+              ]}
+            >
+              Thống kê
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -232,10 +340,20 @@ export default function DashboardScreen() {
             <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.9)' }]}>
               <MaterialCommunityIcons name="target" size={20} color="#FFF" />
             </View>
-            <Text style={styles.quickActionLabel}>Hạn mức</Text>
+            <Text
+              style={[
+                styles.quickActionLabel,
+                { color: theme.isDark ? 'rgba(255,255,255,0.85)' : theme.textPrimary },
+              ]}
+            >
+              Hạn mức
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Detected Bank Transactions */}
+      <PendingTransactionsCard />
 
       {/* Search & Filter Bar */}
       <View style={[styles.filterContainer, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -291,90 +409,7 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* First-time User Quick Start Checklist */}
-      {!isQuickGuideDismissed && (
-        <View style={[styles.guideCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={styles.guideHeaderRow}>
-            <View style={styles.guideTitleWrap}>
-              <View style={[styles.guideBadgeIcon, { backgroundColor: '#F59E0B20' }]}>
-                <MaterialCommunityIcons name="star-shooting" size={16} color="#F59E0B" />
-              </View>
-              <Text style={[styles.guideTitle, { color: theme.textPrimary }]}>3 Bước Bắt Đầu Nhanh</Text>
-            </View>
-            <TouchableOpacity onPress={dismissQuickGuide} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <MaterialCommunityIcons name="close" size={18} color={theme.textTertiary} />
-            </TouchableOpacity>
-          </View>
 
-          <Text style={[styles.guideSubtitle, { color: theme.textSecondary }]}>
-            Dành cho bạn mới: Hoàn tất 3 bước để kiểm soát tài chính tối ưu
-          </Text>
-
-          {/* 3 Step Cards */}
-          <View style={styles.guideStepsList}>
-            <TouchableOpacity
-              style={[styles.guideStepItem, { backgroundColor: theme.surfaceVariant }]}
-              onPress={() => router.push('/(tabs)/wallets')}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.stepNum, { backgroundColor: '#4F46E5' }]}>
-                <Text style={styles.stepNumText}>1</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>Cập nhật số dư các ví</Text>
-                <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>Tiền mặt, tài khoản ngân hàng, MoMo</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={theme.textTertiary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.guideStepItem, { backgroundColor: theme.surfaceVariant }]}
-              onPress={() => setShowAddModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.stepNum, { backgroundColor: '#F43F5E' }]}>
-                <Text style={styles.stepNumText}>2</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>Ghi chép khoản chi đầu tiên</Text>
-                <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>Dùng phím tắt +50K, +100K để nhập nhanh 3s</Text>
-              </View>
-              <MaterialCommunityIcons name="plus-circle" size={18} color="#F43F5E" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.guideStepItem, { backgroundColor: theme.surfaceVariant }]}
-              onPress={() => router.push('/(tabs)/budget')}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.stepNum, { backgroundColor: '#10B981' }]}>
-                <Text style={styles.stepNumText}>3</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>Đặt hạn mức ngân sách tháng</Text>
-                <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>Cảnh báo thông minh tránh bị chi tiêu quá tay</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={theme.textTertiary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Guide Bottom Link */}
-          <View style={[styles.guideFooterRow, { borderTopColor: theme.divider }]}>
-            <TouchableOpacity
-              style={styles.fullGuideLink}
-              onPress={() => setShowGuideModal(true)}
-              activeOpacity={0.75}
-            >
-              <MaterialCommunityIcons name="book-open-page-variant-outline" size={16} color={theme.primary} />
-              <Text style={[styles.fullGuideText, { color: theme.primary }]}>Xem cẩm nang hướng dẫn đầy đủ</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={dismissQuickGuide}>
-              <Text style={[styles.dismissText, { color: theme.textTertiary }]}>Đã hiểu, ẩn đi</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       {/* Transaction List */}
       {sections.length === 0 ? (
@@ -478,10 +513,15 @@ export default function DashboardScreen() {
         onClose={() => setShowNotifModal(false)}
       />
 
-      {/* User Guide Modal */}
-      <UserGuideModal
-        visible={showGuideModal}
-        onClose={() => setShowGuideModal(false)}
+      {/* Mandatory Privacy Policy Consent Modal on First Launch */}
+      <PrivacyModal
+        visible={showMandatoryPrivacy}
+        onClose={() => {}}
+        isMandatoryConsent={true}
+        onAccept={() => {
+          acceptPrivacyPolicy();
+          setShowMandatoryPrivacy(false);
+        }}
       />
     </View>
   );
@@ -745,96 +785,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 8,
   },
-  guideCard: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    borderWidth: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    gap: SPACING.xs + 2,
-  },
-  guideHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  guideTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  guideBadgeIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  guideTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  guideSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 4,
-  },
-  guideStepsList: {
-    gap: 6,
-  },
-  guideStepItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    borderRadius: RADIUS.md,
-  },
-  stepNum: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepNumText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  stepTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  stepDesc: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  guideFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  fullGuideLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  fullGuideText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  dismissText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+
 });

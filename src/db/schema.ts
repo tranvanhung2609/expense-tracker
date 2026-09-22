@@ -3,7 +3,7 @@ import { getDatabase } from './client';
 import { DEFAULT_CATEGORIES, DEFAULT_WALLET } from '../constants/defaultCategories';
 import { toISOString } from '../utils/date';
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const CREATE_WALLETS = `
 CREATE TABLE IF NOT EXISTS wallets (
@@ -59,12 +59,35 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at  TEXT NOT NULL
 );`;
 
+const CREATE_PENDING_TRANSACTIONS = `
+CREATE TABLE IF NOT EXISTS pending_transactions (
+  id                    TEXT PRIMARY KEY,
+  bank_package          TEXT NOT NULL,
+  bank_name             TEXT NOT NULL,
+  amount                INTEGER NOT NULL,
+  type                  TEXT NOT NULL CHECK(type IN ('EXPENSE','INCOME')),
+  note                  TEXT,
+  suggested_category_id TEXT,
+  raw_content           TEXT NOT NULL,
+  status                TEXT NOT NULL CHECK(status IN ('PENDING','CONFIRMED','DISMISSED')),
+  created_at            TEXT NOT NULL
+);`;
+
+const CREATE_CATEGORY_KEYWORDS = `
+CREATE TABLE IF NOT EXISTS category_keywords (
+  keyword      TEXT PRIMARY KEY,
+  category_id  TEXT NOT NULL,
+  usage_count  INTEGER NOT NULL DEFAULT 1,
+  updated_at   TEXT NOT NULL
+);`;
+
 const CREATE_INDEXES = [
-  `CREATE INDEX IF NOT EXISTS idx_tx_date      ON transactions(date);`,
-  `CREATE INDEX IF NOT EXISTS idx_tx_category  ON transactions(category_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_tx_wallet    ON transactions(wallet_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_tx_type      ON transactions(type);`,
-  `CREATE INDEX IF NOT EXISTS idx_notif_date   ON notifications(created_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_tx_date         ON transactions(date);`,
+  `CREATE INDEX IF NOT EXISTS idx_tx_category     ON transactions(category_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_tx_wallet       ON transactions(wallet_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_tx_type         ON transactions(type);`,
+  `CREATE INDEX IF NOT EXISTS idx_notif_date      ON notifications(created_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_pending_status  ON pending_transactions(status);`,
 ];
 
 const CREATE_META = `
@@ -82,6 +105,8 @@ export function initDatabase(): void {
   db.execSync(CREATE_TRANSACTIONS);
   db.execSync(CREATE_BUDGETS);
   db.execSync(CREATE_NOTIFICATIONS);
+  db.execSync(CREATE_PENDING_TRANSACTIONS);
+  db.execSync(CREATE_CATEGORY_KEYWORDS);
 
   for (const idx of CREATE_INDEXES) {
     db.execSync(idx);
@@ -142,6 +167,8 @@ export function resetDatabase(): void {
     db.execSync('DELETE FROM wallets;');
     db.execSync('DELETE FROM categories;');
     db.execSync('DELETE FROM notifications;');
+    db.execSync('DELETE FROM pending_transactions;');
+    db.execSync('DELETE FROM category_keywords;');
     seedDefaultData(db);
   });
 }

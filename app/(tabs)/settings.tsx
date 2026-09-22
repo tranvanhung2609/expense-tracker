@@ -21,6 +21,8 @@ import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useTransactionStore } from '../../src/stores/transactionStore';
 import { useWalletStore } from '../../src/stores/walletStore';
 import { useCategoryStore } from '../../src/stores/categoryStore';
+import { usePendingTransactionStore } from '../../src/stores/pendingTransactionStore';
+import { openAndroidNotificationSettings } from '../../src/services/androidNotificationService';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
 import { exportDatabaseToJSON, restoreDatabaseFromJSONString } from '../../src/utils/backup';
 import { resetDatabase } from '../../src/db/schema';
@@ -36,6 +38,8 @@ import CurrencyPickerModal from '../../src/components/CurrencyPickerModal';
 import RestoreModal from '../../src/components/RestoreModal';
 import PrivacyModal from '../../src/components/PrivacyModal';
 import UserGuideModal from '../../src/components/UserGuideModal';
+import NotificationPermissionGuideModal from '../../src/components/NotificationPermissionGuideModal';
+import ConfirmModal from '../../src/components/ConfirmModal';
 import { getCurrencyConfig } from '../../src/utils/currency';
 import { MaterialIconName } from '../../src/constants/enums';
 
@@ -77,10 +81,51 @@ function SettingRow({ icon, iconColor, label, subtitle, onPress, rightElement, d
 export default function SettingsScreen() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { isDarkMode, isPinEnabled, autoLockTimeout, toggleDarkMode, togglePin, setAutoLockTimeout, resetOnboarding } = useSettingsStore();
+  const {
+    isDarkMode,
+    isPinEnabled,
+    toggleDarkMode,
+    togglePin,
+    resetOnboarding,
+    hasNotificationPermission,
+    setNotificationPermission,
+  } = useSettingsStore();
   const { transactions, loadAll } = useTransactionStore();
   const { load: loadWallets } = useWalletStore();
   const { load: loadCategories } = useCategoryStore();
+  const {
+    isAutoDetectEnabled,
+    toggleAutoDetect,
+    simulateBankNotification,
+  } = usePendingTransactionStore();
+
+  const isAutoDetectActive = isAutoDetectEnabled && hasNotificationPermission;
+
+  const handleAutoDetectToggle = (val: boolean) => {
+    if (val) {
+      if (!hasNotificationPermission) {
+        // Permission not yet granted: DO NOT flip switch ON, show guide modal instead
+        setShowPermissionGuide(true);
+      } else {
+        toggleAutoDetect(true);
+      }
+    } else {
+      toggleAutoDetect(false);
+    }
+  };
+
+  const handleTestSimulator = () => {
+    const item = simulateBankNotification();
+    setConfirmConfig({
+      visible: true,
+      title: '⚡ Đã kích hoạt giả lập!',
+      message: `Đã phát hiện biến động từ ${item.bankName}: ${item.note}.\n\nThanh Dynamic Island đã xuất hiện ở trên cùng để bạn xác nhận hoặc chạm vào để sửa!`,
+      type: 'primary',
+      confirmText: 'Xem ngay',
+      cancelText: undefined,
+      onConfirm: () => setConfirmConfig(null),
+    });
+  };
 
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateRelease, setUpdateRelease] = useState<ReleaseInfo | null>(null);
@@ -89,32 +134,20 @@ export default function SettingsScreen() {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showPermissionGuide, setShowPermissionGuide] = useState(false);
   const [autoCheck, setAutoCheck] = useState(() => isAutoCheckEnabled());
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'destructive' | 'warning' | 'primary' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const currentVersion = getAppCurrentVersion();
   const currencyConfig = getCurrencyConfig();
-
-  const getAutoLockLabel = (ms: number) => {
-    if (ms === 0) return 'Ngay lập tức';
-    if (ms === 30000) return 'Sau 30 giây';
-    if (ms === 60000) return 'Sau 1 phút';
-    if (ms === 300000) return 'Sau 5 phút';
-    return 'Ngay lập tức';
-  };
-
-  const handleSelectAutoLock = () => {
-    Alert.alert(
-      'Thời gian tự động khóa',
-      'Chọn khoảng thời gian ứng dụng sẽ tự khóa sau khi bạn chuyển sang ứng dụng khác:',
-      [
-        { text: 'Ngay lập tức', onPress: () => setAutoLockTimeout(0) },
-        { text: 'Sau 30 giây', onPress: () => setAutoLockTimeout(30000) },
-        { text: 'Sau 1 phút', onPress: () => setAutoLockTimeout(60000) },
-        { text: 'Sau 5 phút', onPress: () => setAutoLockTimeout(300000) },
-        { text: 'Hủy', style: 'cancel' },
-      ]
-    );
-  };
 
   const handleExportCSV = async () => {
     if (transactions.length === 0) {
@@ -197,36 +230,45 @@ export default function SettingsScreen() {
     if (value) {
       await handleBiometric();
     } else {
-      Alert.alert(
-        'Tắt bảo mật',
-        'Bạn có chắc muốn tắt bảo mật sinh trắc học?',
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Tắt', style: 'destructive', onPress: () => togglePin(false) },
-        ]
-      );
+      setConfirmConfig({
+        visible: true,
+        title: 'Tắt bảo mật',
+        message: 'Bạn có chắc muốn tắt bảo mật sinh trắc học khi mở ứng dụng?',
+        type: 'warning',
+        confirmText: 'Tắt bảo mật',
+        cancelText: 'Hủy',
+        onConfirm: () => {
+          togglePin(false);
+          setConfirmConfig(null);
+        },
+      });
     }
   };
 
   const handleResetData = () => {
-    Alert.alert(
-      '⚠️ Xóa toàn bộ dữ liệu',
-      'Toàn bộ giao dịch, hạn mức và ví tuỳ chỉnh sẽ bị xoá vĩnh viễn và khôi phục về mặc định. Bạn có chắc chắn?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa tất cả',
-          style: 'destructive',
-          onPress: () => {
-            resetDatabase();
-            loadAll();
-            loadWallets();
-            loadCategories();
-            Alert.alert('Thành công', 'Dữ liệu đã được đặt lại về trạng thái ban đầu.');
-          },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      title: 'Xóa toàn bộ dữ liệu',
+      message: 'Toàn bộ giao dịch, hạn mức và ví tuỳ chỉnh sẽ bị xoá vĩnh viễn và khôi phục về mặc định. Hành động này không thể hoàn tác.',
+      type: 'destructive',
+      confirmText: 'Xóa tất cả',
+      cancelText: 'Hủy',
+      onConfirm: () => {
+        resetDatabase();
+        loadAll();
+        loadWallets();
+        loadCategories();
+        setConfirmConfig({
+          visible: true,
+          title: 'Thành công',
+          message: 'Dữ liệu đã được đặt lại về trạng thái ban đầu.',
+          type: 'info',
+          confirmText: 'Đóng',
+          cancelText: undefined,
+          onConfirm: () => setConfirmConfig(null),
+        });
+      },
+    });
   };
 
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 16) + 12;
@@ -251,7 +293,7 @@ export default function SettingsScreen() {
             icon="fingerprint"
             iconColor={theme.primary}
             label="Xác thực sinh trắc học"
-            subtitle={isPinEnabled ? 'Đang bật — Khóa app khi thoát' : 'Dùng vân tay / Face ID khi mở app'}
+            subtitle={isPinEnabled ? 'Đang bật — Tự động khóa sau 30 phút' : 'Dùng vân tay / Face ID khi mở app'}
             rightElement={
               <Switch
                 value={isPinEnabled}
@@ -261,18 +303,54 @@ export default function SettingsScreen() {
               />
             }
           />
-          {isPinEnabled && (
-            <>
-              <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-              <SettingRow
-                icon="timer-lock-outline"
-                iconColor="#56CCF2"
-                label="Thời gian tự động khóa"
-                subtitle={`Đang chọn: ${getAutoLockLabel(autoLockTimeout)}`}
-                onPress={handleSelectAutoLock}
+        </View>
+
+        {/* Tự động ghi chép (Android) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.md, marginBottom: SPACING.xs }}>
+          <Text style={[styles.groupLabel, { color: theme.textSecondary, marginBottom: 0 }]}>
+            Tự động ghi chép (Android)
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B98120', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, gap: 4 }}>
+            <MaterialCommunityIcons name="shield-check" size={12} color="#10B981" />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>100% Offline</Text>
+          </View>
+        </View>
+        <View style={[styles.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <SettingRow
+            icon="cellphone-nfc"
+            iconColor="#10B981"
+            label="Tự động nhận diện ngân hàng"
+            subtitle={
+              isAutoDetectActive
+                ? "Đang hoạt động • Bắt biến động số dư Vietcombank, MB, MoMo..."
+                : "Chưa cấp quyền • Bấm để xem hướng dẫn và bật"
+            }
+            onPress={() => setShowPermissionGuide(true)}
+            rightElement={
+              <Switch
+                value={isAutoDetectActive}
+                onValueChange={handleAutoDetectToggle}
+                trackColor={{ false: theme.border, true: '#10B98180' }}
+                thumbColor={isAutoDetectActive ? '#10B981' : '#FFF'}
               />
-            </>
-          )}
+            }
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingRow
+            icon="lightning-bolt"
+            iconColor="#F59E0B"
+            label="Thử nghiệm Dynamic Island"
+            subtitle="Bấm để giả lập 1 giao dịch ngân hàng và xem hiệu ứng nổi"
+            onPress={handleTestSimulator}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingRow
+            icon="information-outline"
+            iconColor="#6366F1"
+            label="Cam kết bảo mật & riêng tư"
+            subtitle="Thông báo được xử lý hoàn toàn trên máy, không gửi ra ngoài"
+            onPress={() => setShowPrivacyModal(true)}
+          />
         </View>
 
         {/* Quản lý */}
@@ -488,6 +566,39 @@ export default function SettingsScreen() {
         visible={showPrivacyModal}
         onClose={() => setShowPrivacyModal(false)}
       />
+
+      {/* Notification Permission Guide Modal */}
+      <NotificationPermissionGuideModal
+        visible={showPermissionGuide}
+        onClose={() => setShowPermissionGuide(false)}
+        onPermissionGranted={() => {
+          setNotificationPermission(true);
+          toggleAutoDetect(true);
+          setConfirmConfig({
+            visible: true,
+            title: '✅ Đã kích hoạt thành công',
+            message: 'Tính năng tự động nhận diện ngân hàng đã được bật. Các biến động số dư mới sẽ tự động hiển thị ở trạng thái nháp để bạn xác nhận nhanh.',
+            type: 'primary',
+            confirmText: 'Tuyệt vời',
+            cancelText: undefined,
+            onConfirm: () => setConfirmConfig(null),
+          });
+        }}
+      />
+
+      {/* Themed Confirmation Modal */}
+      {confirmConfig && (
+        <ConfirmModal
+          visible={confirmConfig.visible}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          type={confirmConfig.type}
+          confirmText={confirmConfig.confirmText}
+          cancelText={confirmConfig.cancelText}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={() => setConfirmConfig(null)}
+        />
+      )}
     </View>
   );
 }
@@ -512,6 +623,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
+  },
+  permissionTipBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.sm,
+  },
+  permissionTipText: {
+    flex: 1,
+    fontSize: 11.5,
+    lineHeight: 16,
   },
   row: {
     flexDirection: 'row',

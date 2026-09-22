@@ -11,8 +11,10 @@ import { useCategoryStore } from '../src/stores/categoryStore';
 import { useSettingsStore } from '../src/stores/settingsStore';
 
 import BiometricLockOverlay from '../src/components/BiometricLockOverlay';
+import DynamicIslandBanner from '../src/components/DynamicIslandBanner';
 
 import { useNotificationStore } from '../src/stores/notificationStore';
+import { usePendingTransactionStore } from '../src/stores/pendingTransactionStore';
 import { checkAppUpdate, isAutoCheckEnabled } from '../src/services/updateService';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,6 +30,7 @@ export default function RootLayout() {
     useWalletStore.getState().load();
     useCategoryStore.getState().load();
     useNotificationStore.getState().load();
+    usePendingTransactionStore.getState().loadPending();
 
     // Background update check if enabled
     if (isAutoCheckEnabled()) {
@@ -53,6 +56,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={styles.root}>
         <PaperProvider theme={theme}>
           <BiometricLockOverlay>
+            <DynamicIslandBanner />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />

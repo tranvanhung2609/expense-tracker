@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,16 +15,55 @@ import { SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
 interface PrivacyModalProps {
   visible: boolean;
   onClose: () => void;
+  isMandatoryConsent?: boolean;
+  onAccept?: () => void;
 }
 
-export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
+export default function PrivacyModal({
+  visible,
+  onClose,
+  isMandatoryConsent = false,
+  onAccept,
+}: PrivacyModalProps) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
+  const [isAgreed, setIsAgreed] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setIsAgreed(false);
+    }
+  }, [visible]);
+
+  const handleBackdropPress = () => {
+    if (!isMandatoryConsent) {
+      onClose();
+    }
+  };
+
+  const handleConfirm = () => {
+    if (isMandatoryConsent) {
+      if (!isAgreed) return;
+      onAccept?.();
+      onClose();
+    } else {
+      onClose();
+    }
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={isMandatoryConsent ? () => {} : onClose}
+    >
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity
+          style={styles.backdrop}
+          onPress={handleBackdropPress}
+          activeOpacity={1}
+        />
 
         <View
           style={[
@@ -49,9 +88,11 @@ export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
                 Cam kết bảo mật dữ liệu tài chính của bạn
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <MaterialCommunityIcons name="close" size={20} color={theme.textTertiary} />
-            </TouchableOpacity>
+            {!isMandatoryConsent && (
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <MaterialCommunityIcons name="close" size={20} color={theme.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -108,13 +149,63 @@ export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
             </View>
           </ScrollView>
 
-          {/* Close button */}
+          {/* Consent Checkbox for First-Time Entry */}
+          {isMandatoryConsent && (
+            <TouchableOpacity
+              style={[
+                styles.checkboxRow,
+                {
+                  borderColor: isAgreed ? theme.primary : theme.border,
+                  backgroundColor: isAgreed ? theme.primary + '12' : theme.surfaceVariant,
+                },
+              ]}
+              onPress={() => setIsAgreed(prev => !prev)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name={isAgreed ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                size={24}
+                color={isAgreed ? theme.primary : theme.textTertiary}
+              />
+              <Text style={[styles.checkboxLabel, { color: theme.textPrimary }]}>
+                Tôi đã đọc và đồng ý với{' '}
+                <Text style={{ fontWeight: '700', color: theme.primary }}>
+                  Chính sách bảo mật & Quyền riêng tư
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Action button */}
           <TouchableOpacity
-            style={[styles.confirmBtn, { backgroundColor: theme.primary }]}
-            onPress={onClose}
-            activeOpacity={0.8}
+            style={[
+              styles.confirmBtn,
+              {
+                backgroundColor: isMandatoryConsent
+                  ? isAgreed
+                    ? theme.primary
+                    : theme.border
+                  : theme.primary,
+                opacity: isMandatoryConsent && !isAgreed ? 0.6 : 1,
+              },
+            ]}
+            onPress={handleConfirm}
+            disabled={isMandatoryConsent && !isAgreed}
+            activeOpacity={0.85}
           >
-            <Text style={styles.confirmBtnText}>Tôi đã hiểu & Đồng ý</Text>
+            <Text
+              style={[
+                styles.confirmBtnText,
+                {
+                  color:
+                    isMandatoryConsent && !isAgreed
+                      ? theme.textTertiary
+                      : '#FFFFFF',
+                },
+              ]}
+            >
+              {isMandatoryConsent ? 'Đồng ý & Tiếp tục vào ứng dụng' : 'Tôi đã hiểu & Đóng'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -173,7 +264,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   scrollContent: {
-    maxHeight: 380,
+    maxHeight: 340,
     marginVertical: SPACING.xs,
   },
   section: {
@@ -194,9 +285,23 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingLeft: 28,
   },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.sm + 2,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    marginTop: SPACING.sm,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
   confirmBtn: {
     marginTop: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingVertical: 14,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',

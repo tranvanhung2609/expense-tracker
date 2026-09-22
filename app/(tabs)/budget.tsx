@@ -22,6 +22,7 @@ import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
 import BudgetProgressBar from '../../src/components/BudgetProgressBar';
 import AmountKeypad from '../../src/components/AmountKeypad';
+import ConfirmModal from '../../src/components/ConfirmModal';
 
 const budgetRepo = new BudgetRepository();
 const categoryRepo = new CategoryRepository();
@@ -32,6 +33,15 @@ export default function BudgetScreen() {
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'destructive' | 'warning' | 'primary' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [monthYear] = useState(getCurrentMonthYear());
 
   const load = useCallback(() => {
@@ -42,21 +52,19 @@ export default function BudgetScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleDelete = (budget: BudgetWithSpent) => {
-    Alert.alert(
-      'Xóa hạn mức',
-      `Bạn có chắc muốn xóa hạn mức của danh mục "${budget.categoryName}" không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: () => {
-            budgetRepo.delete(budget.id);
-            load();
-          },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      title: 'Xóa hạn mức',
+      message: `Bạn có chắc muốn xóa hạn mức chi tiêu của danh mục "${budget.categoryName}" trong tháng này?`,
+      type: 'destructive',
+      confirmText: 'Xóa hạn mức',
+      cancelText: 'Hủy',
+      onConfirm: () => {
+        budgetRepo.delete(budget.id);
+        load();
+        setConfirmConfig(null);
+      },
+    });
   };
 
   const usedCategoryIds = new Set(budgets.map(b => b.categoryId));
@@ -99,7 +107,11 @@ export default function BudgetScreen() {
         keyExtractor={b => b.id}
         contentContainerStyle={[styles.list, { paddingBottom: 90 + insets.bottom }]}
         renderItem={({ item }) => (
-          <TouchableOpacity onLongPress={() => handleDelete(item)} activeOpacity={0.9}>
+          <TouchableOpacity
+            onPress={() => handleDelete(item)}
+            onLongPress={() => handleDelete(item)}
+            activeOpacity={0.85}
+          >
             <BudgetProgressBar budget={item} />
           </TouchableOpacity>
         )}
@@ -125,7 +137,7 @@ export default function BudgetScreen() {
         }
         ListFooterComponent={
           budgets.length > 0 ? (
-            <Text style={[styles.hint, { color: theme.textTertiary }]}>Giữ lâu để xóa hạn mức</Text>
+            <Text style={[styles.hint, { color: theme.textTertiary }]}>Chạm hoặc giữ lâu để quản lý hạn mức</Text>
           ) : null
         }
       />
@@ -140,6 +152,20 @@ export default function BudgetScreen() {
             setShowAddModal(false);
             load();
           }}
+        />
+      )}
+
+      {/* Themed Confirmation Modal */}
+      {confirmConfig && (
+        <ConfirmModal
+          visible={confirmConfig.visible}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          type={confirmConfig.type}
+          confirmText={confirmConfig.confirmText}
+          cancelText={confirmConfig.cancelText}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={() => setConfirmConfig(null)}
         />
       )}
     </View>

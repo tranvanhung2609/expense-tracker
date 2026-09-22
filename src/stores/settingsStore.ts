@@ -45,9 +45,15 @@ interface AppSettings {
   pinHash: string | null;
   currency: string;
   isBalanceHidden: boolean;
-  autoLockTimeout: number; // in milliseconds: 0 = immediate, 30000 = 30s, 60000 = 1m, 300000 = 5m
+  autoLockTimeout: number; // in milliseconds: default 30 mins = 1800000 ms
 
   isQuickGuideDismissed: boolean;
+
+  hasNotificationPermission: boolean;
+  setNotificationPermission: (granted: boolean) => void;
+
+  hasAcceptedPrivacyPolicy: boolean;
+  acceptPrivacyPolicy: () => void;
 
   toggleDarkMode: () => void;
   togglePin: (enabled: boolean) => void;
@@ -61,14 +67,28 @@ interface AppSettings {
   resetQuickGuide: () => void;
 }
 
+export const DEFAULT_AUTO_LOCK_TIMEOUT = 30 * 60 * 1000; // 30 phút tự động khóa
+
 export const useSettingsStore = create<AppSettings>((set, get) => ({
   isDarkMode: getSafeBoolean('dark_mode', false),
   isPinEnabled: getSafeBoolean('pin_enabled', false),
   pinHash: getSafeStringOrNull('pin_hash'),
   currency: getSafeString('app_currency', 'VND'),
   isBalanceHidden: getSafeBoolean('balance_hidden', false),
-  autoLockTimeout: getSafeNumber('auto_lock_timeout', 0),
+  autoLockTimeout: DEFAULT_AUTO_LOCK_TIMEOUT,
   isQuickGuideDismissed: getSafeBoolean('quick_guide_dismissed', false),
+  hasNotificationPermission: getSafeBoolean('has_notification_permission', false),
+  hasAcceptedPrivacyPolicy: getSafeBoolean('privacy_policy_accepted', false),
+
+  setNotificationPermission: (granted: boolean) => {
+    storage.set('has_notification_permission', granted);
+    set({ hasNotificationPermission: granted });
+  },
+
+  acceptPrivacyPolicy: () => {
+    storage.set('privacy_policy_accepted', true);
+    set({ hasAcceptedPrivacyPolicy: true });
+  },
 
   toggleDarkMode: () => {
     const next = !get().isDarkMode;
@@ -107,8 +127,9 @@ export const useSettingsStore = create<AppSettings>((set, get) => ({
 
   resetOnboarding: () => {
     storage.set('onboarding_done', false);
+    storage.set('privacy_policy_accepted', false);
     storage.set('quick_guide_dismissed', false);
-    set({ isQuickGuideDismissed: false });
+    set({ isQuickGuideDismissed: false, hasAcceptedPrivacyPolicy: false });
   },
 
   dismissQuickGuide: () => {

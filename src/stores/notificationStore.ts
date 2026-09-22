@@ -6,12 +6,17 @@ import {
 } from '../repositories/NotificationRepository';
 import { BudgetRepository } from '../repositories/BudgetRepository';
 import { TransactionRepository } from '../repositories/TransactionRepository';
+import {
+  PendingTransactionRepository,
+  PendingTransaction,
+} from '../repositories/PendingTransactionRepository';
 import { formatVND } from '../utils/currency';
 import { NOTIFICATION_TYPES } from '../constants/enums';
 
 const notifRepo = new NotificationRepository();
 const budgetRepo = new BudgetRepository();
 const txRepo = new TransactionRepository();
+const pendingRepo = new PendingTransactionRepository();
 
 interface NotificationStore {
   notifications: AppNotification[];
@@ -24,6 +29,8 @@ interface NotificationStore {
   removeNotification: (id: string) => void;
   clearAll: () => void;
   checkBudgetAlerts: (categoryId: string, monthYear: string) => void;
+  notifyPendingTransaction: (pending: PendingTransaction) => void;
+  checkPendingTransactionsAlert: () => void;
 }
 
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
@@ -136,6 +143,49 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     } catch (e) {
       // Prevent notification calculation errors from disrupting transactions
       console.warn('Budget alert check failed:', e);
+    }
+  },
+
+  notifyPendingTransaction: (pending: PendingTransaction) => {
+    try {
+      const isExpense = pending.type === 'EXPENSE';
+      notifRepo.create({
+        title: `📝 Chi tiêu ở nháp mới (${pending.bankName})`,
+        message: `Phát hiện ${isExpense ? 'khoản chi' : 'khoản thu'} ${formatVND(pending.amount)}: "${pending.note || 'Biến động số dư'}". Chạm để kiểm tra và xác nhận.`,
+        type: NOTIFICATION_TYPES.REMINDER,
+        actionUrl: 'pending_transactions',
+      });
+      get().load();
+    } catch (e) {
+      console.warn('Notify pending transaction failed:', e);
+    }
+  },
+
+  checkPendingTransactionsAlert: () => {
+    try {
+      const pendingList = pendingRepo.getPending();
+      if (pendingList.length === 0) return;
+
+      const existing = notifRepo.getAll(15);
+      const nowMs = Date.now();
+      const alreadyNotified = existing.some(
+        n =>
+          (n.title.includes('chi tiêu đang ở nháp') || n.title.includes('giao dịch nháp')) &&
+          nowMs - new Date(n.createdAt).getTime() < 4 * 60 * 60 * 1000 // within 4h
+      );
+
+      if (!alreadyNotified) {
+        const totalAmount = pendingList.reduce((sum, p) => sum + p.amount, 0);
+        notifRepo.create({
+          title: `📋 Có ${pendingList.length} chi tiêu đang ở nháp`,
+          message: `Bạn có ${pendingList.length} giao dịch (tổng ${formatVND(totalAmount)}) đang chờ xác nhận vào sổ. Nhấn để duyệt ngay!`,
+          type: NOTIFICATION_TYPES.REMINDER,
+          actionUrl: 'pending_transactions',
+        });
+        get().load();
+      }
+    } catch (e) {
+      console.warn('Pending alert check failed:', e);
     }
   },
 }));

@@ -21,6 +21,7 @@ import { useSettingsStore } from '../src/stores/settingsStore';
 import { useWalletStore } from '../src/stores/walletStore';
 import { SUPPORTED_CURRENCIES, parseCurrency, formatKeypadInput } from '../src/utils/currency';
 import { getDatabase } from '../src/db/client';
+import PrivacyModal from '../src/components/PrivacyModal';
 
 const { width } = Dimensions.get('window');
 
@@ -79,10 +80,11 @@ export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   // Setup Step States
-  const { setCurrency, togglePin, markOnboardingDone } = useSettingsStore();
+  const { setCurrency, togglePin, markOnboardingDone, acceptPrivacyPolicy } = useSettingsStore();
   const [selectedCurrency, setSelectedCurrency] = useState('VND');
   const [initialBalance, setInitialBalance] = useState('0');
   const [enableBiometric, setEnableBiometric] = useState(false);
+  const [showPrivacyConsent, setShowPrivacyConsent] = useState(false);
 
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
@@ -120,8 +122,14 @@ export default function OnboardingScreen() {
       } catch {}
     }
 
-    // 4. Finish
+    // 4. Prompt mandatory Privacy Policy consent before entering the app
+    setShowPrivacyConsent(true);
+  };
+
+  const handleAcceptPrivacyAndEnter = () => {
+    acceptPrivacyPolicy();
     markOnboardingDone();
+    setShowPrivacyConsent(false);
     router.replace('/(tabs)');
   };
 
@@ -231,6 +239,13 @@ export default function OnboardingScreen() {
             <Text style={styles.nextBtnText}>🚀  Hoàn tất & Bắt đầu</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        <PrivacyModal
+          visible={showPrivacyConsent}
+          onClose={() => {}}
+          isMandatoryConsent={true}
+          onAccept={handleAcceptPrivacyAndEnter}
+        />
       </View>
     );
   }

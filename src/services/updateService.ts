@@ -24,7 +24,7 @@ export interface CheckUpdateResult {
 }
 
 const DEFAULT_DISTRIBUTOR_URL =
-  'https://raw.githubusercontent.com/expensetracker/app-releases/main/version.json';
+  'https://api.github.com/repos/tranvanhung2609/expense-tracker/releases/latest';
 
 export function getAppCurrentVersion(): string {
   try {
@@ -56,8 +56,10 @@ export function setAutoCheckEnabled(enabled: boolean): void {
  * Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if v1 == v2
  */
 export function compareSemver(v1: string, v2: string): number {
-  const parts1 = v1.split('.').map(p => parseInt(p, 10) || 0);
-  const parts2 = v2.split('.').map(p => parseInt(p, 10) || 0);
+  const cleanV1 = v1.replace(/^v/i, '');
+  const cleanV2 = v2.replace(/^v/i, '');
+  const parts1 = cleanV1.split('.').map(p => parseInt(p, 10) || 0);
+  const parts2 = cleanV2.split('.').map(p => parseInt(p, 10) || 0);
 
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const p1 = parts1[i] ?? 0;
@@ -74,22 +76,58 @@ export async function checkAppUpdate(isManual = false): Promise<CheckUpdateResul
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
 
     const response = await fetch(manifestUrl, {
       signal: controller.signal,
       headers: {
         'Cache-Control': 'no-cache',
-        Accept: 'application/json',
+        Accept: 'application/vnd.github.v3+json, application/json',
       },
     });
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Máy chủ phân phối phản hồi mã ${response.status}`);
+      if (response.status === 404) {
+        // No release found yet on GitHub
+        return {
+          hasUpdate: false,
+          currentVersion,
+          release: null,
+        };
+      }
+      throw new Error(`Máy chủ phản hồi mã ${response.status}`);
     }
 
-    const releaseData: ReleaseInfo = await response.json();
+    const data: any = await response.json();
+
+    // Support both GitHub Release API format and custom version.json
+    let releaseData: ReleaseInfo;
+    if (data.tag_name) {
+      // GitHub Release format
+      const apkAsset = data.assets?.find((a: any) =>
+        typeof a.name === 'string' && a.name.toLowerCase().endsWith('.apk')
+      );
+      const changelogLines = data.body
+        ? data.body
+            .split('\n')
+            .map((l: string) => l.replace(/^[-*•]\s*/, '').trim())
+            .filter((l: string) => l.length > 0)
+        : ['Cập nhật tính năng và sửa lỗi ổn định.'];
+
+      releaseData = {
+        version: data.tag_name.replace(/^v/i, ''),
+        versionCode: 1,
+        releaseDate: data.published_at ? data.published_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        title: data.name || `Bản cập nhật ${data.tag_name}`,
+        changelog: changelogLines,
+        downloadUrl: apkAsset ? apkAsset.browser_download_url : data.html_url,
+        mandatory: false,
+      };
+    } else {
+      // Standard version.json format
+      releaseData = data as ReleaseInfo;
+    }
 
     const hasUpdate = compareSemver(releaseData.version, currentVersion) > 0;
 

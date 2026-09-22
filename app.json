@@ -7,12 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "expense-tracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B0F19"
-    },
     "ios": {
       "supportsTablet": false
     },
@@ -24,16 +18,38 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.expensetracker.app",
-      "edgeToEdgeLayoutEnabled": true
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0F19"
+        }
+      ]
     ],
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2fd4e952-e87c-4b24-bacb-6ccbdd89e412"
+      }
+    },
+    "owner": "callmesuper"
   }
 }
