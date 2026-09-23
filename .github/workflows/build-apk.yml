@@ -48,6 +48,18 @@ jobs:
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Configure Gradle JVM memory & ABI
+        run: |
+          GRADLE_PROPS="android/gradle.properties"
+          # Fix JVM memory — ghi đè giá trị mặc định của expo prebuild
+          sed -i '/^org.gradle.jvmargs/d' $GRADLE_PROPS
+          echo 'org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=2048m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8' >> $GRADLE_PROPS
+          # Giới hạn ABI chỉ arm64-v8a — bỏ armeabi-v7a để giảm thời gian build CMake native
+          sed -i '/^reactNativeArchitectures/d' $GRADLE_PROPS
+          echo 'reactNativeArchitectures=arm64-v8a' >> $GRADLE_PROPS
+          echo "=== gradle.properties (memory + ABI) ==="
+          grep -E 'jvmargs|Architectures' $GRADLE_PROPS
+
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -60,8 +72,6 @@ jobs:
             gradle-${{ runner.os }}-
 
       - name: Build Android Release APK with Gradle
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
         run: |
           cd android
           chmod +x gradlew
