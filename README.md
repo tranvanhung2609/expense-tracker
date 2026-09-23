@@ -44,13 +44,21 @@
 1. **Đăng ký tài khoản SePay**: Truy cập [my.sepay.vn](https://my.sepay.vn) và tạo tài khoản miễn phí.
 2. **Liên kết ngân hàng**: Vào mục **Tài khoản ngân hàng** ➔ Thêm tài khoản ngân hàng bạn muốn theo dõi biến động số dư.
 3. **Lấy API Token**:
-   - Vào mục **Tích hợp web / API** ➔ Bấm **Tạo API Key** và sao chép mã Token.
-   - Mở app **Expense Tracker** ➔ Vào tab **Cài đặt** ➔ **Cấu hình SePay (API & Webhook)** ➔ Dán mã Token và bấm **"Kiểm tra & Lưu kết nối"**.
+   - Truy cập trực tiếp: [my.sepay.vn/companyapi](https://my.sepay.vn/companyapi) (hoặc vào **Cấu hình Công ty** ➔ **API Access**).
+   - Bấm **+ Thêm API**, đặt tên (ví dụ: `ExpenseTracker Mobile`), chọn trạng thái `Hoạt động` và bấm **Thêm**.
+   - Sao chép mã Token được cấp.
+4. **Kích hoạt trên app**:
+   - Mở app **Expense Tracker** ➔ Vào tab **Cài đặt** ➔ chọn **Ngân hàng tự động (SePay)**.
+   - Dán mã Token vào ô **SePay API Token** và bấm **"Lưu & Kiểm tra kết nối"**.
 
-> 💡 **Trải nghiệm:** 
-> - **Tự động đồng bộ khi mở app**: Hệ thống tự động kéo các giao dịch mới nhất từ SePay và phân loại danh mục thông minh.
-> - **Thanh Dynamic Island Banner**: Khi có giao dịch mới, thanh Dynamic Island Banner sẽ lập tức nổi lên màn hình để bạn xác nhận với 1 chạm!
-> - **Chống trùng lặp tuyệt đối**: Tự động khử trùng lặp giao dịch theo mã tham chiếu (`reference_number`), không bao giờ bị ghi trùng lặp.
+> 📖 **Xem hướng dẫn chi tiết toàn diện về API Key & Webhook**: [docs/AUTO_BANK_DETECTION.md](./docs/AUTO_BANK_DETECTION.md)
+
+> 💡 **Tính năng nổi bật:** 
+> - **Chạy độc lập trên điện thoại**: Không cần máy chủ web riêng, điện thoại tự động kết nối SePay qua Wifi/4G.
+> - **Chạy ngầm định kỳ (Background Fetch)**: Tự động kiểm tra giao dịch mới mỗi 15 phút ngay cả khi đã thoát app.
+> - **Thông báo hệ thống Android**: Rung, phát chuông và hiện thông báo lên màn hình khóa khi có tiền vào/ra.
+> - **Thanh Dynamic Island Banner**: Khi mở app, thanh Dynamic Island nổi lên đỉnh màn hình để duyệt giao dịch 1 chạm!
+> - **Chống trùng lặp tuyệt đối**: Tự động khử trùng lặp giao dịch theo mã tham chiếu (`reference_number`).
 > - **Hỗ trợ SePay Webhook**: Có sẵn công cụ giả lập & kiểm tra Webhook payload trực tiếp ngay trong ứng dụng.
 
 ---

@@ -46,6 +46,3 @@ yarn-error.*
 /ios
 /android
 
-# local documentation
-docs/
-
