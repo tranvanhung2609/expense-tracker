@@ -18,9 +18,7 @@ jobs:
   build-apk:
     name: Build & Release Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -50,18 +48,40 @@ jobs:
       - name: Generate Android native project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Build Android Release APK with Gradle
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease -x lint -x lintVitalRelease -x lintVitalAnalyzeRelease --no-daemon
           cd ..
+
+      - name: Decode Keystore from Secret
+        run: |
+          mkdir -p credentials
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > credentials/release.keystore
 
       - name: Sign APK with persistent Keystore
         run: |
           TAG_NAME="${{ github.event.inputs.version || github.ref_name }}"
           if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ] || [ "$TAG_NAME" = "master" ]; then
-            TAG_NAME="v1.0.0"
+            TAG_NAME="${{ github.event.inputs.version || 'v1.0.0' }}"
+          fi
+          # Ensure tag has v prefix
+          if [[ ! "$TAG_NAME" == v* ]]; then
+            TAG_NAME="v${TAG_NAME}"
           fi
 
           APK_RAW=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
@@ -73,9 +93,9 @@ jobs:
 
           echo "Đang ký chứng chỉ APK bằng $APKSIGNER..."
           $APKSIGNER sign --ks credentials/release.keystore \
-            --ks-pass pass:expense123456 \
-            --ks-key-alias expensetracker \
-            --key-pass pass:expense123456 \
+            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+            --ks-key-alias ${{ secrets.KEY_ALIAS }} \
+            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
             --out "$FINAL_APK" \
             "$APK_RAW"
 
@@ -83,6 +103,10 @@ jobs:
           echo "✅ Ký APK thành công: $FINAL_APK"
           echo "APK_FILE=$FINAL_APK" >> $GITHUB_ENV
           echo "RELEASE_TAG=$TAG_NAME" >> $GITHUB_ENV
+
+      - name: Cleanup keystore
+        if: always()
+        run: rm -f credentials/release.keystore
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -101,3 +125,5 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+

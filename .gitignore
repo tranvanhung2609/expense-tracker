@@ -15,10 +15,14 @@ build/
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Credentials & signing keys — NEVER commit these
+credentials/
 
 # Metro
 .metro-health-check*
