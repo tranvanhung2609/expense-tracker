@@ -14,8 +14,10 @@ import DynamicIslandBanner from '../src/components/DynamicIslandBanner';
 
 import { useNotificationStore } from '../src/stores/notificationStore';
 import { usePendingTransactionStore } from '../src/stores/pendingTransactionStore';
+import { isSepayConfigured, isSepayAutoSyncEnabled, syncSepayTransactions } from '../src/services/sepayService';
 import { checkAppUpdate, isAutoCheckEnabled } from '../src/services/updateService';
-import { initializeBankNotificationListener } from '../src/services/androidNotificationService';
+import { initSystemNotifications, requestSystemNotificationPermission } from '../src/services/systemNotificationService';
+import { registerBackgroundSync } from '../src/services/backgroundSyncService';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -32,8 +34,19 @@ export default function RootLayout() {
     useNotificationStore.getState().load();
     usePendingTransactionStore.getState().loadPending();
 
-    // Initialize Android bank notification listener
-    const unsubscribeNotification = initializeBankNotificationListener();
+    // Initialize System Notifications & Channels
+    initSystemNotifications().catch(() => {});
+    requestSystemNotificationPermission().catch(() => {});
+
+    // Register Background Periodic Sync (Android WorkManager)
+    registerBackgroundSync().catch(() => {});
+
+    // Auto-sync SePay transactions in background if enabled
+    if (isSepayConfigured() && isSepayAutoSyncEnabled()) {
+      setTimeout(() => {
+        syncSepayTransactions().catch(() => {});
+      }, 1500);
+    }
 
     // Background update check if enabled
     if (isAutoCheckEnabled()) {
@@ -50,10 +63,6 @@ export default function RootLayout() {
       }, 100);
       return () => clearTimeout(timer);
     }
-
-    return () => {
-      unsubscribeNotification();
-    };
   }, []);
 
   const theme = isDarkMode ? darkTheme : lightTheme;

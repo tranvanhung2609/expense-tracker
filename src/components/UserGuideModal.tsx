@@ -55,6 +55,32 @@ const TOPICS: GuideTopic[] = [
     ],
   },
   {
+    id: 'sepay',
+    icon: 'bank-transfer',
+    iconColor: '#3B82F6',
+    title: 'Tự động ghi chép SePay (API & Webhook)',
+    tag: 'Tự động hóa thông minh',
+    description:
+      'Liên kết tài khoản ngân hàng (Vietcombank, MB, Techcombank, TPBank...) qua SePay để ứng dụng tự động nhận diện biến động số dư.',
+    tips: [
+      {
+        title: 'Lấy API Token SePay miễn phí',
+        desc: 'Đăng ký tài khoản tại my.sepay.vn, liên kết tài khoản ngân hàng và tạo API Key để dán vào phần Cài đặt.',
+        icon: 'key-variant',
+      },
+      {
+        title: 'Tự động đồng bộ khi mở app',
+        desc: 'Mỗi khi mở ứng dụng, hệ thống tự động kiểm tra và kéo các giao dịch mới nhất mà không cần nhập tay.',
+        icon: 'sync',
+      },
+      {
+        title: 'Thanh Dynamic Island Banner',
+        desc: 'Mỗi giao dịch mới sẽ trượt xuống dưới dạng thanh Dynamic Island ở đỉnh màn hình để bạn xác nhận chỉ trong 1 giây.',
+        icon: 'bell-badge-outline',
+      },
+    ],
+  },
+  {
     id: 'wallets',
     icon: 'wallet-outline',
     iconColor: '#4F46E5',

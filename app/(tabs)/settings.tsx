@@ -21,10 +21,6 @@ import { useTransactionStore } from '../../src/stores/transactionStore';
 import { useWalletStore } from '../../src/stores/walletStore';
 import { useCategoryStore } from '../../src/stores/categoryStore';
 import { usePendingTransactionStore } from '../../src/stores/pendingTransactionStore';
-import {
-  openAndroidNotificationSettings,
-  checkNotificationPermissionGranted,
-} from '../../src/services/androidNotificationService';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
 import { exportDatabaseToJSON, restoreDatabaseFromJSONString } from '../../src/utils/backup';
 import { resetDatabase } from '../../src/db/schema';
@@ -40,7 +36,13 @@ import CurrencyPickerModal from '../../src/components/CurrencyPickerModal';
 import RestoreModal from '../../src/components/RestoreModal';
 import PrivacyModal from '../../src/components/PrivacyModal';
 import UserGuideModal from '../../src/components/UserGuideModal';
-import NotificationPermissionGuideModal from '../../src/components/NotificationPermissionGuideModal';
+import SepayConnectModal from '../../src/components/SepayConnectModal';
+import {
+  isSepayConfigured,
+  getSepayLastSyncedAt,
+  syncSepayTransactions,
+} from '../../src/services/sepayService';
+import { sendSystemTransactionNotification } from '../../src/services/systemNotificationService';
 import ConfirmModal from '../../src/components/ConfirmModal';
 import { getCurrencyConfig } from '../../src/utils/currency';
 import { MaterialIconName } from '../../src/constants/enums';
@@ -94,42 +96,16 @@ export default function SettingsScreen() {
   const { load: loadWallets } = useWalletStore();
   const { load: loadCategories } = useCategoryStore();
   const {
-    isAutoDetectEnabled,
-    toggleAutoDetect,
     simulateBankNotification,
   } = usePendingTransactionStore();
 
-  const isAutoDetectActive = isAutoDetectEnabled && hasNotificationPermission;
-
-  // Auto sync permission state on mount
-  useEffect(() => {
-    const isGranted = checkNotificationPermissionGranted();
-    if (isGranted !== hasNotificationPermission) {
-      setNotificationPermission(isGranted);
-    }
-  }, []);
-
-  const handleAutoDetectToggle = (val: boolean) => {
-    if (val) {
-      const isGranted = checkNotificationPermissionGranted();
-      if (!isGranted) {
-        // Permission not yet granted: DO NOT flip switch ON, show guide modal instead
-        setShowPermissionGuide(true);
-      } else {
-        setNotificationPermission(true);
-        toggleAutoDetect(true);
-      }
-    } else {
-      toggleAutoDetect(false);
-    }
-  };
-
   const handleTestSimulator = () => {
     const item = simulateBankNotification();
+    sendSystemTransactionNotification(item).catch(() => {});
     setConfirmConfig({
       visible: true,
       title: '⚡ Đã kích hoạt giả lập!',
-      message: `Đã phát hiện biến động từ ${item.bankName}: ${item.note}.\n\nThanh Dynamic Island đã xuất hiện ở trên cùng để bạn xác nhận hoặc chạm vào để sửa!`,
+      message: `Đã phát hiện biến động từ ${item.bankName}: ${item.note}.\n\nThanh Dynamic Island & Thông báo Android đã được gửi đến thanh trạng thái!`,
       type: 'primary',
       confirmText: 'Xem ngay',
       cancelText: undefined,
@@ -144,7 +120,9 @@ export default function SettingsScreen() {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
-  const [showPermissionGuide, setShowPermissionGuide] = useState(false);
+  const [showSepayModal, setShowSepayModal] = useState(false);
+  const [sepayConfigured, setSepayConfigured] = useState(() => isSepayConfigured());
+  const [isSyncingSepay, setIsSyncingSepay] = useState(false);
   const [autoCheck, setAutoCheck] = useState(() => isAutoCheckEnabled());
   const [confirmConfig, setConfirmConfig] = useState<{
     visible: boolean;
@@ -155,6 +133,22 @@ export default function SettingsScreen() {
     cancelText?: string;
     onConfirm: () => void;
   } | null>(null);
+
+  useEffect(() => {
+    setSepayConfigured(isSepayConfigured());
+  }, []);
+
+  const handleSyncSepayNow = async () => {
+    if (!isSepayConfigured()) {
+      setShowSepayModal(true);
+      return;
+    }
+    setIsSyncingSepay(true);
+    const result = await syncSepayTransactions();
+    setIsSyncingSepay(false);
+    setSepayConfigured(isSepayConfigured());
+    Alert.alert('Kết quả đồng bộ SePay', result.message);
+  };
 
   const currentVersion = getAppCurrentVersion();
   const currencyConfig = getCurrencyConfig();
@@ -253,51 +247,57 @@ export default function SettingsScreen() {
 
 
 
-        {/* Tự động ghi chép (Android) */}
+        {/* Tự động ghi chép ngân hàng (SePay Webhook & API) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.md, marginBottom: SPACING.xs }}>
           <Text style={[styles.groupLabel, { color: theme.textSecondary, marginBottom: 0 }]}>
-            Tự động ghi chép (Android)
+            Tự động ghi chép ngân hàng (SePay)
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B98120', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, gap: 4 }}>
-            <MaterialCommunityIcons name="shield-check" size={12} color="#10B981" />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>100% Offline</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: sepayConfigured ? '#10B98120' : theme.surfaceVariant, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, gap: 4 }}>
+            <MaterialCommunityIcons name={sepayConfigured ? "check-decagram" : "bank-transfer"} size={12} color={sepayConfigured ? "#10B981" : theme.textTertiary} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: sepayConfigured ? '#10B981' : theme.textTertiary }}>
+              {sepayConfigured ? 'Đã kết nối SePay' : 'Chưa kết nối'}
+            </Text>
           </View>
         </View>
         <View style={[styles.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          {/* 1. Cấu hình SePay Webhook & API */}
           <SettingRow
-            icon="cellphone-nfc"
-            iconColor="#10B981"
-            label="Tự động nhận diện ngân hàng"
+            icon="bank-transfer"
+            iconColor="#3B82F6"
+            label="Cấu hình SePay (API & Webhook)"
             subtitle={
-              isAutoDetectActive
-                ? "Đang hoạt động • Bắt biến động số dư Vietcombank, MB, MoMo..."
-                : "Chưa cấp quyền • Bấm để xem hướng dẫn và bật"
+              sepayConfigured
+                ? (getSepayLastSyncedAt()
+                    ? `Đã liên kết • Đồng bộ gần nhất: ${new Date(getSepayLastSyncedAt()!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}`
+                    : "Đã liên kết SePay • Sẵn sàng tự động nhận diện")
+                : "Nhập SePay API Token hoặc Webhook để tự động nhận diện"
             }
-            onPress={() => setShowPermissionGuide(true)}
+            onPress={() => setShowSepayModal(true)}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+
+          {/* 2. Đồng bộ giao dịch ngay */}
+          <SettingRow
+            icon="sync"
+            iconColor="#10B981"
+            label="Đồng bộ giao dịch SePay ngay"
+            subtitle="Kéo biến động số dư mới nhất từ tài khoản ngân hàng"
+            onPress={handleSyncSepayNow}
             rightElement={
-              <Switch
-                value={isAutoDetectActive}
-                onValueChange={handleAutoDetectToggle}
-                trackColor={{ false: theme.border, true: '#10B98180' }}
-                thumbColor={isAutoDetectActive ? '#10B981' : '#FFF'}
-              />
+              isSyncingSepay ? (
+                <ActivityIndicator size="small" color="#10B981" />
+              ) : undefined
             }
           />
           <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+
+          {/* 3. Thử nghiệm Dynamic Island */}
           <SettingRow
             icon="lightning-bolt"
             iconColor="#F59E0B"
             label="Thử nghiệm Dynamic Island"
-            subtitle="Bấm để giả lập 1 giao dịch ngân hàng và xem hiệu ứng nổi"
+            subtitle="Bắn 1 giao dịch mẫu (-65,000 đ) để kiểm tra thanh nổi Dynamic Island"
             onPress={handleTestSimulator}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingRow
-            icon="information-outline"
-            iconColor="#6366F1"
-            label="Cam kết bảo mật & riêng tư"
-            subtitle="Thông báo được xử lý hoàn toàn trên máy, không gửi ra ngoài"
-            onPress={() => setShowPrivacyModal(true)}
           />
         </View>
 
@@ -515,22 +515,15 @@ export default function SettingsScreen() {
         onClose={() => setShowPrivacyModal(false)}
       />
 
-      {/* Notification Permission Guide Modal */}
-      <NotificationPermissionGuideModal
-        visible={showPermissionGuide}
-        onClose={() => setShowPermissionGuide(false)}
-        onPermissionGranted={() => {
-          setNotificationPermission(true);
-          toggleAutoDetect(true);
-          setConfirmConfig({
-            visible: true,
-            title: '✅ Đã kích hoạt thành công',
-            message: 'Tính năng tự động nhận diện ngân hàng đã được bật. Các biến động số dư mới sẽ tự động hiển thị ở trạng thái nháp để bạn xác nhận nhanh.',
-            type: 'primary',
-            confirmText: 'Tuyệt vời',
-            cancelText: undefined,
-            onConfirm: () => setConfirmConfig(null),
-          });
+      {/* SePay Webhook & API Connection Modal */}
+      <SepayConnectModal
+        visible={showSepayModal}
+        onClose={() => {
+          setShowSepayModal(false);
+          setSepayConfigured(isSepayConfigured());
+        }}
+        onSuccess={() => {
+          setSepayConfigured(isSepayConfigured());
         }}
       />
 

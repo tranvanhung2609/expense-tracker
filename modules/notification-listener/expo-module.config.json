@@ -1,7 +1,0 @@
-{
-  "platforms": ["android"],
-  "android": {
-    "package": "expo.modules.notificationlistener",
-    "modules": ["expo.modules.notificationlistener.NotificationListenerModule"]
-  }
-}
