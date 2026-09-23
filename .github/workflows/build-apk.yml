@@ -72,6 +72,8 @@ jobs:
             gradle-${{ runner.os }}-
 
       - name: Build Android Release APK with Gradle
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd android
           chmod +x gradlew
