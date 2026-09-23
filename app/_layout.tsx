@@ -10,12 +10,12 @@ import { useWalletStore } from '../src/stores/walletStore';
 import { useCategoryStore } from '../src/stores/categoryStore';
 import { useSettingsStore } from '../src/stores/settingsStore';
 
-import BiometricLockOverlay from '../src/components/BiometricLockOverlay';
 import DynamicIslandBanner from '../src/components/DynamicIslandBanner';
 
 import { useNotificationStore } from '../src/stores/notificationStore';
 import { usePendingTransactionStore } from '../src/stores/pendingTransactionStore';
 import { checkAppUpdate, isAutoCheckEnabled } from '../src/services/updateService';
+import { initializeBankNotificationListener } from '../src/services/androidNotificationService';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -32,6 +32,9 @@ export default function RootLayout() {
     useNotificationStore.getState().load();
     usePendingTransactionStore.getState().loadPending();
 
+    // Initialize Android bank notification listener
+    const unsubscribeNotification = initializeBankNotificationListener();
+
     // Background update check if enabled
     if (isAutoCheckEnabled()) {
       setTimeout(() => {
@@ -47,6 +50,10 @@ export default function RootLayout() {
       }, 100);
       return () => clearTimeout(timer);
     }
+
+    return () => {
+      unsubscribeNotification();
+    };
   }, []);
 
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -55,20 +62,18 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={styles.root}>
         <PaperProvider theme={theme}>
-          <BiometricLockOverlay>
-            <DynamicIslandBanner />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-              <Stack.Screen
-                name="transfer"
-                options={{
-                  animation: 'slide_from_bottom',
-                  presentation: 'modal',
-                }}
-              />
-            </Stack>
-          </BiometricLockOverlay>
+          <DynamicIslandBanner />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+            <Stack.Screen
+              name="transfer"
+              options={{
+                animation: 'slide_from_bottom',
+                presentation: 'modal',
+              }}
+            />
+          </Stack>
         </PaperProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Expense Tracker",
     "slug": "expense-tracker",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "expense-tracker",
@@ -11,6 +11,7 @@
       "supportsTablet": false
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#0B0F19",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -19,18 +20,14 @@
       },
       "package": "com.expensetracker.app",
       "permissions": [
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "POST_NOTIFICATIONS",
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "POST_NOTIFICATIONS"
       ]
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-local-authentication",
       "@react-native-community/datetimepicker",
+      "./plugins/withNotificationListener",
       [
         "expo-splash-screen",
         {

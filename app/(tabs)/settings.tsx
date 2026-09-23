@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as LocalAuthentication from 'expo-local-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
@@ -22,7 +21,10 @@ import { useTransactionStore } from '../../src/stores/transactionStore';
 import { useWalletStore } from '../../src/stores/walletStore';
 import { useCategoryStore } from '../../src/stores/categoryStore';
 import { usePendingTransactionStore } from '../../src/stores/pendingTransactionStore';
-import { openAndroidNotificationSettings } from '../../src/services/androidNotificationService';
+import {
+  openAndroidNotificationSettings,
+  checkNotificationPermissionGranted,
+} from '../../src/services/androidNotificationService';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
 import { exportDatabaseToJSON, restoreDatabaseFromJSONString } from '../../src/utils/backup';
 import { resetDatabase } from '../../src/db/schema';
@@ -83,9 +85,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const {
     isDarkMode,
-    isPinEnabled,
     toggleDarkMode,
-    togglePin,
     resetOnboarding,
     hasNotificationPermission,
     setNotificationPermission,
@@ -101,12 +101,22 @@ export default function SettingsScreen() {
 
   const isAutoDetectActive = isAutoDetectEnabled && hasNotificationPermission;
 
+  // Auto sync permission state on mount
+  useEffect(() => {
+    const isGranted = checkNotificationPermissionGranted();
+    if (isGranted !== hasNotificationPermission) {
+      setNotificationPermission(isGranted);
+    }
+  }, []);
+
   const handleAutoDetectToggle = (val: boolean) => {
     if (val) {
-      if (!hasNotificationPermission) {
+      const isGranted = checkNotificationPermissionGranted();
+      if (!isGranted) {
         // Permission not yet granted: DO NOT flip switch ON, show guide modal instead
         setShowPermissionGuide(true);
       } else {
+        setNotificationPermission(true);
         toggleAutoDetect(true);
       }
     } else {
@@ -198,52 +208,7 @@ export default function SettingsScreen() {
     setAutoCheckEnabled(value);
   };
 
-  const handleBiometric = async () => {
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-      if (!hasHardware || !isEnrolled) {
-        Alert.alert(
-          'Không hỗ trợ',
-          'Thiết bị không có cảm biến vân tay/khuôn mặt hoặc chưa đăng ký xác thực sinh trắc học.'
-        );
-        return;
-      }
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Xác thực để bật bảo mật',
-        fallbackLabel: 'Dùng mã PIN',
-      });
-
-      if (result.success) {
-        togglePin(true);
-        Alert.alert('✅ Đã bật', 'Bảo mật sinh trắc học đã được kích hoạt.');
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Xác thực sinh trắc học không thành công.';
-      Alert.alert('Lỗi xác thực', msg);
-    }
-  };
-
-  const handlePinToggle = async (value: boolean) => {
-    if (value) {
-      await handleBiometric();
-    } else {
-      setConfirmConfig({
-        visible: true,
-        title: 'Tắt bảo mật',
-        message: 'Bạn có chắc muốn tắt bảo mật sinh trắc học khi mở ứng dụng?',
-        type: 'warning',
-        confirmText: 'Tắt bảo mật',
-        cancelText: 'Hủy',
-        onConfirm: () => {
-          togglePin(false);
-          setConfirmConfig(null);
-        },
-      });
-    }
-  };
 
   const handleResetData = () => {
     setConfirmConfig({
@@ -286,24 +251,7 @@ export default function SettingsScreen() {
       >
         <Text style={[styles.screenTitle, { color: theme.textPrimary }]}>Cài đặt</Text>
 
-        {/* Security */}
-        <Text style={[styles.groupLabel, { color: theme.textSecondary }]}>Bảo mật</Text>
-        <View style={[styles.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <SettingRow
-            icon="fingerprint"
-            iconColor={theme.primary}
-            label="Xác thực sinh trắc học"
-            subtitle={isPinEnabled ? 'Đang bật — Tự động khóa sau 30 phút' : 'Dùng vân tay / Face ID khi mở app'}
-            rightElement={
-              <Switch
-                value={isPinEnabled}
-                onValueChange={handlePinToggle}
-                trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                thumbColor={isPinEnabled ? theme.primary : '#FFF'}
-              />
-            }
-          />
-        </View>
+
 
         {/* Tự động ghi chép (Android) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.md, marginBottom: SPACING.xs }}>

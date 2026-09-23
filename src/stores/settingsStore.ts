@@ -41,11 +41,8 @@ function getSafeNumber(key: string, defaultValue: number): number {
 
 interface AppSettings {
   isDarkMode: boolean;
-  isPinEnabled: boolean;
-  pinHash: string | null;
   currency: string;
   isBalanceHidden: boolean;
-  autoLockTimeout: number; // in milliseconds: default 30 mins = 1800000 ms
 
   isQuickGuideDismissed: boolean;
 
@@ -56,10 +53,8 @@ interface AppSettings {
   acceptPrivacyPolicy: () => void;
 
   toggleDarkMode: () => void;
-  togglePin: (enabled: boolean) => void;
   setCurrency: (currency: string) => void;
   toggleBalanceHidden: () => void;
-  setAutoLockTimeout: (timeoutMs: number) => void;
   isOnboardingDone: () => boolean;
   markOnboardingDone: () => void;
   resetOnboarding: () => void;
@@ -67,15 +62,10 @@ interface AppSettings {
   resetQuickGuide: () => void;
 }
 
-export const DEFAULT_AUTO_LOCK_TIMEOUT = 30 * 60 * 1000; // 30 phút tự động khóa
-
 export const useSettingsStore = create<AppSettings>((set, get) => ({
   isDarkMode: getSafeBoolean('dark_mode', false),
-  isPinEnabled: getSafeBoolean('pin_enabled', false),
-  pinHash: getSafeStringOrNull('pin_hash'),
   currency: getSafeString('app_currency', 'VND'),
   isBalanceHidden: getSafeBoolean('balance_hidden', false),
-  autoLockTimeout: DEFAULT_AUTO_LOCK_TIMEOUT,
   isQuickGuideDismissed: getSafeBoolean('quick_guide_dismissed', false),
   hasNotificationPermission: getSafeBoolean('has_notification_permission', false),
   hasAcceptedPrivacyPolicy: getSafeBoolean('privacy_policy_accepted', false),
@@ -96,11 +86,6 @@ export const useSettingsStore = create<AppSettings>((set, get) => ({
     set({ isDarkMode: next });
   },
 
-  togglePin: (enabled: boolean) => {
-    storage.set('pin_enabled', enabled);
-    set({ isPinEnabled: enabled });
-  },
-
   setCurrency: (currency: string) => {
     storage.set('app_currency', currency);
     set({ currency });
@@ -110,11 +95,6 @@ export const useSettingsStore = create<AppSettings>((set, get) => ({
     const next = !get().isBalanceHidden;
     storage.set('balance_hidden', next);
     set({ isBalanceHidden: next });
-  },
-
-  setAutoLockTimeout: (timeoutMs: number) => {
-    storage.set('auto_lock_timeout', timeoutMs);
-    set({ autoLockTimeout: timeoutMs });
   },
 
   isOnboardingDone: () => {

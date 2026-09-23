@@ -15,7 +15,6 @@ import {
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as LocalAuthentication from 'expo-local-authentication';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../src/constants/theme';
 import { useSettingsStore } from '../src/stores/settingsStore';
 import { useWalletStore } from '../src/stores/walletStore';
@@ -69,7 +68,7 @@ const SLIDES = [
     iconColor: '#8B5CF6',
     bgColor: '#0B0F19',
     title: 'Bảo mật tuyệt đối\n& Ngoại tuyến',
-    subtitle: '100% dữ liệu lưu an toàn trên máy (Offline-First).\nKhóa app bằng vân tay/Face ID và xuất file\nExcel CSV / sao lưu JSON bất cứ lúc nào.',
+    subtitle: '100% dữ liệu lưu an toàn trên máy (Offline-First).\nDễ dàng xuất file Excel CSV và sao lưu JSON\nbất cứ lúc nào.',
   },
 ];
 
@@ -80,10 +79,9 @@ export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   // Setup Step States
-  const { setCurrency, togglePin, markOnboardingDone, acceptPrivacyPolicy } = useSettingsStore();
+  const { setCurrency, markOnboardingDone, acceptPrivacyPolicy } = useSettingsStore();
   const [selectedCurrency, setSelectedCurrency] = useState('VND');
   const [initialBalance, setInitialBalance] = useState('0');
-  const [enableBiometric, setEnableBiometric] = useState(false);
   const [showPrivacyConsent, setShowPrivacyConsent] = useState(false);
 
   const handleNext = () => {
@@ -111,18 +109,7 @@ export default function OnboardingScreen() {
       }
     }
 
-    // 3. Biometric
-    if (enableBiometric) {
-      try {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-        if (hasHardware && isEnrolled) {
-          togglePin(true);
-        }
-      } catch {}
-    }
-
-    // 4. Prompt mandatory Privacy Policy consent before entering the app
+    // 3. Prompt mandatory Privacy Policy consent before entering the app
     setShowPrivacyConsent(true);
   };
 
@@ -213,22 +200,7 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Biometric Toggle */}
-          <View style={[styles.setupCard, styles.switchCard]}>
-            <View style={styles.switchInfo}>
-              <View style={styles.switchLabelRow}>
-                <MaterialCommunityIcons name="fingerprint" size={20} color="#00C896" />
-                <Text style={styles.cardLabel}>Bật khóa sinh trắc học</Text>
-              </View>
-              <Text style={styles.cardHint}>Khóa ứng dụng bằng vân tay khi thoát</Text>
-            </View>
-            <Switch
-              value={enableBiometric}
-              onValueChange={setEnableBiometric}
-              trackColor={{ false: '#243048', true: '#4F46E5' }}
-              thumbColor={enableBiometric ? '#FFF' : '#A0A5B5'}
-            />
-          </View>
+
 
           {/* CTA */}
           <TouchableOpacity

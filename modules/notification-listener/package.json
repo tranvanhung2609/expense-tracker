@@ -1,0 +1,7 @@
+{
+  "name": "notification-listener",
+  "version": "1.0.0",
+  "description": "Android NotificationListenerService for listening to bank notifications in Expense Tracker",
+  "main": "index.ts",
+  "types": "index.ts"
+}

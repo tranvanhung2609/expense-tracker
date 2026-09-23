@@ -1,5 +1,21 @@
 import { Platform, Linking, Alert } from 'react-native';
 import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
+import {
+  isNotificationAccessGranted as checkNativePermission,
+  openSystemNotificationSettings as openNativeSettings,
+  addNotificationReceivedListener,
+  NotificationEventPayload,
+} from '../../modules/notification-listener';
+
+/**
+ * Check if the app currently has Notification Access permission granted.
+ */
+export function checkNotificationPermissionGranted(): boolean {
+  if (Platform.OS !== 'android') {
+    return false;
+  }
+  return checkNativePermission();
+}
 
 /**
  * Android Notification Access Helper
@@ -11,17 +27,21 @@ export async function openAndroidNotificationSettings(): Promise<void> {
     return;
   }
 
+  // First try via native module
+  const opened = openNativeSettings();
+  if (opened) return;
+
   try {
-    // Open Android Notification Listener Settings
+    // Fallback 1: Direct Android Notification Listener Settings Intent
     await Linking.sendIntent('android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS');
   } catch (error) {
     try {
-      // Fallback to app details settings
+      // Fallback 2: General App Details Settings
       await Linking.openSettings();
     } catch {
       Alert.alert(
         'Hướng dẫn bật quyền',
-        'Vào Cài đặt máy ➔ Ứng dụng ➔ Quyền truy cập đặc biệt ➔ Truy cập thông báo ➔ Tìm ứng dụng và gạt Cho phép.'
+        'Vào Cài đặt máy ➔ Ứng dụng ➔ Quyền truy cập đặc biệt ➔ Truy cập thông báo ➔ Tìm "Expense Tracker" và gạt Cho phép.'
       );
     }
   }
@@ -36,9 +56,20 @@ export function initializeBankNotificationListener(): () => void {
     return () => {};
   }
 
-  // Hook for Native Event Emitter when built with Development Build / Prebuild
-  // Example: DeviceEventEmitter.addListener('onNotificationReceived', (data) => ...)
+  console.log('[AndroidNotificationService] Initializing bank notification listener...');
+
+  const subscription = addNotificationReceivedListener((event: NotificationEventPayload) => {
+    try {
+      console.log(`[AndroidNotificationService] Event received from ${event.packageName}: ${event.title}`);
+      usePendingTransactionStore
+        .getState()
+        .processNotification(event.packageName, event.title, event.body);
+    } catch (err) {
+      console.error('[AndroidNotificationService] Failed to process notification:', err);
+    }
+  });
+
   return () => {
-    // Cleanup on unmount
+    subscription?.remove();
   };
 }

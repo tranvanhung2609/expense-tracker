@@ -13,7 +13,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../constants/theme';
-import { openAndroidNotificationSettings } from '../services/androidNotificationService';
+import {
+  openAndroidNotificationSettings,
+  checkNotificationPermissionGranted,
+} from '../services/androidNotificationService';
 
 interface NotificationPermissionGuideModalProps {
   visible: boolean;
@@ -35,6 +38,25 @@ export default function NotificationPermissionGuideModal({
       setHasOpenedSettings(false);
     }
   }, [visible]);
+
+  // Auto-detect when user returns from Android Settings
+  useEffect(() => {
+    if (!visible) return;
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        const granted = checkNotificationPermissionGranted();
+        if (granted) {
+          onPermissionGranted?.();
+          onClose();
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [visible, onPermissionGranted, onClose]);
 
   const handleOpenSettings = async () => {
     setHasOpenedSettings(true);
@@ -122,10 +144,10 @@ export default function NotificationPermissionGuideModal({
                 </View>
                 <View style={styles.stepContent}>
                   <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>
-                    Tìm tên ứng dụng trong danh sách
+                    Tìm "Expense Tracker" trong danh sách
                   </Text>
                   <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>
-                    Cuộn danh sách và bấm chọn đúng <Text style={{ fontWeight: '700', color: theme.primary }}>ứng dụng</Text> của bạn.
+                    Cuộn danh sách và bấm chọn đúng <Text style={{ fontWeight: '700', color: theme.primary }}>Expense Tracker</Text>.
                   </Text>
                 </View>
               </View>
@@ -137,10 +159,10 @@ export default function NotificationPermissionGuideModal({
                 </View>
                 <View style={styles.stepContent}>
                   <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>
-                    Bật công tắc gạt sang "Cho phép"
+                    Bật công tắc sang "Cho phép"
                   </Text>
                   <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>
-                    Bấm vào tên ứng dụng, bật nút gạt và nhấn "Cho phép" trên hộp thoại xác nhận bảo mật của Android.
+                    Bấm vào Expense Tracker, gạt công tắc Cho phép truy cập thông báo và nhấn Cho phép.
                   </Text>
                 </View>
               </View>
@@ -155,10 +177,22 @@ export default function NotificationPermissionGuideModal({
                     Quay lại ứng dụng này
                   </Text>
                   <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>
-                    Ứng dụng sẽ lập tức tự động nhận diện biến động từ Vietcombank, MB Bank, Techcombank, MoMo,...
+                    Ứng dụng sẽ tự động kích hoạt nhận diện biến động từ Vietcombank, MB Bank, Techcombank, MoMo,...
                   </Text>
                 </View>
               </View>
+            </View>
+
+            {/* Android 13/14+ Cảnh báo Cài đặt bị hạn chế */}
+            <View style={[styles.calloutCard, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B40', marginTop: SPACING.md }]}>
+              <View style={styles.calloutHeader}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#F59E0B" />
+                <Text style={[styles.calloutTitle, { color: '#F59E0B' }]}>LƯU Ý CHO ANDROID 13 & 14+:</Text>
+              </View>
+              <Text style={[styles.calloutText, { color: theme.textPrimary, fontSize: 12, lineHeight: 18 }]}>
+                Nếu công tắc gạt bị làm mờ và máy báo <Text style={styles.boldHighlight}>"Cài đặt bị hạn chế"</Text>:{'\n'}
+                Vào <Text style={styles.boldHighlight}>Cài đặt máy ➔ Ứng dụng ➔ Expense Tracker</Text> ➔ chạm vào dấu <Text style={styles.boldHighlight}>3 chấm (⋮)</Text> góc trên bên phải ➔ chọn <Text style={{ fontWeight: '700', color: '#10B981' }}>Cho phép cài đặt bị hạn chế</Text>. Sau đó quay lại bật quyền bình thường!
+              </Text>
             </View>
 
             {/* Hộp xác nhận sau khi mở cài đặt */}
