@@ -17,12 +17,31 @@ try {
   if (TaskManager && typeof TaskManager.defineTask === 'function') {
     TaskManager.defineTask(BACKGROUND_SEPAY_SYNC_TASK, async () => {
       try {
-        console.log('[BackgroundSync] Android WorkManager triggered SePay sync task.');
+        console.log('[BackgroundSync] Android WorkManager/AlarmManager triggered SePay sync task.');
 
+        // 1. Ensure SQLite schema & tables exist in headless environment
+        try {
+          const { initDatabase } = require('../db/schema');
+          initDatabase();
+        } catch (dbErr) {
+          console.warn('[BackgroundSync] Headless DB initialization warning:', dbErr);
+        }
+
+        // 2. Ensure system notification channels & categories exist in headless environment
+        try {
+          const { initSystemNotifications } = require('./systemNotificationService');
+          await initSystemNotifications();
+        } catch (notifErr) {
+          console.warn('[BackgroundSync] Headless notification channels initialization warning:', notifErr);
+        }
+
+        // 3. Check configuration & auto-sync toggle
         if (!isSepayConfigured() || !isSepayAutoSyncEnabled()) {
+          console.log('[BackgroundSync] SePay is not configured or auto-sync is disabled.');
           return BackgroundFetch?.BackgroundFetchResult?.NoData ?? 1;
         }
 
+        // 4. Fetch transactions from SePay API
         const result = await syncSepayTransactions();
 
         if (result.success && result.syncedCount > 0) {
@@ -44,7 +63,7 @@ try {
 }
 
 /**
- * Register background periodic sync with Android WorkManager / iOS Background Fetch
+ * Register background periodic sync with Android WorkManager / AlarmManager / iOS Background Fetch
  */
 export async function registerBackgroundSync(): Promise<boolean> {
   if (!TaskManager || !BackgroundFetch) {
@@ -54,12 +73,13 @@ export async function registerBackgroundSync(): Promise<boolean> {
   try {
     const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_SEPAY_SYNC_TASK);
     if (isRegistered) {
+      console.log('[BackgroundSync] Task already registered in TaskManager.');
       return true;
     }
 
     await BackgroundFetch.registerTaskAsync(BACKGROUND_SEPAY_SYNC_TASK, {
-      minimumInterval: 15 * 60, // 15 minutes
-      stopOnTerminate: false, // Continue running after app is closed / killed
+      minimumInterval: 15 * 60, // 15 minutes (Standard Android & iOS interval)
+      stopOnTerminate: false, // Continue running even after app is closed / killed
       startOnBoot: true, // Auto-start on device reboot
     });
 
@@ -83,6 +103,7 @@ export async function unregisterBackgroundSync(): Promise<void> {
     const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_SEPAY_SYNC_TASK);
     if (isRegistered) {
       await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SEPAY_SYNC_TASK);
+      console.log('[BackgroundSync] Successfully unregistered background sync task.');
     }
   } catch (error) {
     console.warn('[BackgroundSync] Failed to unregister background sync:', error);

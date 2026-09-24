@@ -5,10 +5,11 @@
 </p>
 
 <p align="center">
-  <strong>Ứng dụng quản lý tài chính & chi tiêu cá nhân thông minh, bảo mật, tự động nhận diện biến động số dư ngân hàng theo mô hình Offline-First trên nền tảng React Native & Expo.</strong>
+  <strong>Ứng dụng quản lý tài chính & chi tiêu cá nhân thông minh, bảo mật, tự động nhận diện biến động số dư ngân hàng và chạy ngầm theo mô hình Offline-First trên nền tảng React Native & Expo.</strong>
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Version-v1.0.5-4F46E5?style=for-the-badge" alt="Version 1.0.5" />
   <img src="https://img.shields.io/badge/Expo-v57.0-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo" />
   <img src="https://img.shields.io/badge/React_Native-v0.86-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" />
   <img src="https://img.shields.io/badge/TypeScript-v5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
@@ -21,10 +22,17 @@
 
 ## 🌟 Giới Thiệu (Overview)
 
-**Expense Tracker** là ứng dụng di động giúp bạn kiểm soát tài chính cá nhân một cách chặt chẽ, trực quan và an toàn.
-* **100% Ngoại tuyến (Offline-First)**: Lưu trữ toàn bộ dữ liệu trên thiết bị bằng SQLite, bảo mật tuyệt đối, không gửi bất kỳ dữ liệu chi tiêu nào lên máy chủ đám mây.
-* **Tự động nhận diện ngân hàng**: Nhận thông báo biến động từ Vietcombank, MB, Techcombank, TPBank, VPBank, ACB, BIDV, VietinBank, MoMo, ZaloPay... và đẩy thanh **Dynamic Island Banner** nổi lên màn hình để xác nhận chỉ với 1 chạm.
-* **An toàn Google Play Protect**: Sử dụng kiến trúc Cầu nối Tự động hóa (Automation Bridge via Deep Link), không xin quyền nhạy cảm trong hệ thống, cài đặt file APK trên mọi điện thoại Android mà **không bị Play Protect chặn**.
+**Expense Tracker** là ứng dụng di động giúp bạn quản lý tài chính và thu chi cá nhân một cách chặt chẽ, tức thời, trực quan và an toàn tuyệt đối.
+* **100% Ngoại tuyến (Offline-First)**: Lưu trữ toàn bộ dữ liệu trên thiết bị bằng SQLite, bảo mật tuyệt đối, không gửi bất kỳ thông tin chi tiêu hay số dư nào lên máy chủ đám mây của bên thứ ba.
+* **Tự động nhận diện biến động ngân hàng (SePay Open Banking & Bank Parser)**: Đồng bộ biến động từ hầu hết các ngân hàng tại Việt Nam (*Vietcombank, MBBank, Techcombank, TPBank, VPBank, ACB, BIDV, VietinBank, MoMo, ZaloPay...*).
+* **Chạy ngầm tự động (Headless Background Sync)**: Tích hợp Android WorkManager và AlarmManager ở tầng lõi `index.ts`, tự động kiểm tra giao dịch và đẩy thông báo ngay cả khi **đã đóng hoàn toàn ứng dụng** hoặc **màn hình điện thoại đang khóa**.
+* **Tác vụ nhanh trên thanh thông báo (Notification Bar Quick Actions)**: Thao tác 1 chạm trực tiếp trên thanh thông báo Android:
+  - `[⚡ Ghi nhận ngay]`: Lưu giao dịch vào ví và danh mục thông minh tức thì.
+  - `[✏️ Xem chi tiết]`: Mở app và kích hoạt ngay Dynamic Island / Modal chỉnh sửa.
+  - `[❌ Bỏ qua]`: Loại bỏ giao dịch khỏi hàng đợi mà không ghi sổ.
+* **Thanh Dynamic Island Banner**: Khi đang mở ứng dụng, thanh đảo thông minh nổi bật từ cạnh trên màn hình cho phép duyệt và xác nhận khoản chi chỉ với 1 chạm.
+* **Tự động cập nhật ứng dụng (In-App Updater)**: Tự động kiểm tra bản phát hành mới trên GitHub Releases, tải file APK với thanh tiến trình trực quan và cài đặt trực tiếp không qua CH Play.
+* **An toàn Google Play Protect**: Không sử dụng các quyền can thiệp nhạy cảm (Accessibility hay SMS), cài đặt mượt mà trên mọi thiết bị Android mà **không bị Play Protect cảnh báo**.
 
 ---
 
@@ -32,65 +40,70 @@
 
 1. Truy cập mục [GitHub Releases](https://github.com/tranvanhung2609/expense-tracker/releases/latest) của dự án.
 2. Tải về file `ExpenseTracker-vX.X.X.apk` mới nhất.
-3. Mở file APK trên điện thoại Android và bấm **Cài đặt**.
-   > **Lưu ý:** Ứng dụng đã được tinh chỉnh sạch hoàn toàn các quyền nhạy cảm, bạn có thể cài đặt mượt mà trên mọi thiết bị (Xiaomi/HyperOS, Samsung One UI, Oppo, Vivo, Pixel...).
+3. Mở file APK trên điện thoại Android và chọn **Cài đặt**.
+4. Khởi chạy ứng dụng và thực hiện tour giới thiệu 5 bước để làm quen các tính năng.
 
 ---
 
 ## ⚡ Hướng Dẫn Kích Hoạt Tự Động Ghi Chép Qua SePay (1 Phút)
 
-**Expense Tracker** hỗ trợ kết nối trực tiếp với hạ tầng Open Banking **[SePay (sepay.vn)](https://sepay.vn)** — giải pháp Fintech chính thống hàng đầu tại Việt Nam, hỗ trợ hầu hết các ngân hàng (Vietcombank, MB, Techcombank, TPBank, VPBank, ACB, BIDV, Agribank...):
+Ứng dụng hỗ trợ kết nối trực tiếp với cổng Open Banking **[SePay (sepay.vn)](https://sepay.vn)**:
 
-1. **Đăng ký tài khoản SePay**: Truy cập [my.sepay.vn](https://my.sepay.vn) và tạo tài khoản miễn phí.
-2. **Liên kết ngân hàng**: Vào mục **Tài khoản ngân hàng** ➔ Thêm tài khoản ngân hàng bạn muốn theo dõi biến động số dư.
+1. **Đăng ký tài khoản SePay**: Truy cập [my.sepay.vn](https://my.sepay.vn) và đăng ký tài khoản miễn phí.
+2. **Liên kết tài khoản ngân hàng**: Vào mục **Tài khoản ngân hàng** ➔ Thêm tài khoản ngân hàng bạn muốn theo dõi.
 3. **Lấy API Token**:
-   - Truy cập trực tiếp: [my.sepay.vn/companyapi](https://my.sepay.vn/companyapi) (hoặc vào **Cấu hình Công ty** ➔ **API Access**).
+   - Truy cập: [my.sepay.vn/companyapi](https://my.sepay.vn/companyapi) (hoặc vào mục **Cấu hình Công ty** ➔ **API Access**).
    - Bấm **+ Thêm API**, đặt tên (ví dụ: `ExpenseTracker Mobile`), chọn trạng thái `Hoạt động` và bấm **Thêm**.
-   - Sao chép mã Token được cấp.
-4. **Kích hoạt trên app**:
-   - Mở app **Expense Tracker** ➔ Vào tab **Cài đặt** ➔ chọn **Ngân hàng tự động (SePay)**.
-   - Dán mã Token vào ô **SePay API Token** và bấm **"Lưu & Kiểm tra kết nối"**.
-
-> 📖 **Xem hướng dẫn chi tiết toàn diện về API Key & Webhook**: [docs/AUTO_BANK_DETECTION.md](./docs/AUTO_BANK_DETECTION.md)
-
-> 💡 **Tính năng nổi bật:** 
-> - **Chạy độc lập trên điện thoại**: Không cần máy chủ web riêng, điện thoại tự động kết nối SePay qua Wifi/4G.
-> - **Chạy ngầm định kỳ (Background Fetch)**: Tự động kiểm tra giao dịch mới mỗi 15 phút ngay cả khi đã thoát app.
-> - **Thông báo hệ thống Android**: Rung, phát chuông và hiện thông báo lên màn hình khóa khi có tiền vào/ra.
-> - **Thanh Dynamic Island Banner**: Khi mở app, thanh Dynamic Island nổi lên đỉnh màn hình để duyệt giao dịch 1 chạm!
-> - **Chống trùng lặp tuyệt đối**: Tự động khử trùng lặp giao dịch theo mã tham chiếu (`reference_number`).
-> - **Hỗ trợ SePay Webhook**: Có sẵn công cụ giả lập & kiểm tra Webhook payload trực tiếp ngay trong ứng dụng.
+   - Sao chép chuỗi mã Token vừa được cấp.
+4. **Kích hoạt trên ứng dụng**:
+   - Mở app **Expense Tracker** ➔ Vào tab **Cài đặt** ➔ chọn **Cấu hình SePay (API & Webhook)**.
+   - Dán mã Token vào ô **SePay API Token** và bấm **"Kiểm tra & Lưu kết nối"**.
+5. **Cấp quyền chạy ngầm không giới hạn (Quan trọng cho Android)**:
+   - Trong tab Cài đặt hoặc trong popup SePay, bấm vào mục **"Chạy ngầm không giới hạn (Tắt tối ưu pin)"**.
+   - Chọn **Không hạn chế (Unrestricted)** để hệ điều hành không đóng băng tiến trình ngầm khi bạn tắt màn hình.
+   - Bấm nút **"Thử thông báo"** để kiểm tra hoạt động của 3 nút tác vụ nhanh trên thanh thông báo.
 
 ---
 
-## 📖 Hướng Dẫn Sử Dụng Cơ Bản (User Guide)
+## 🔔 Cơ Chế Nhận Diện & Tác Vụ Thanh Thông Báo (Notification System)
+
+| Tình huống | Hành vi ứng dụng |
+| :--- | :--- |
+| **Khi app đang mở (Active)** | Thông báo hệ thống được ẩn, thanh **Dynamic Island Banner** lập tức trượt xuống từ đỉnh màn hình với danh mục tự động đề xuất, nút xác nhận và chọn nhanh danh mục ăn uống, cà phê, mua sắm. |
+| **Khi app chạy ngầm / đóng (Background / Killed)** | Tiến trình Headless Task định kỳ kéo giao dịch từ SePay và bắn thông báo ưu tiên cao ra thanh trạng thái (Notification Bar) và màn hình khóa kèm 3 nút tác vụ: `[⚡ Ghi nhận ngay]`, `[✏️ Xem chi tiết]`, `[❌ Bỏ qua]`. |
+| **Bấm `⚡ Ghi nhận ngay`** | Giao dịch được lưu trực tiếp vào cơ sở dữ liệu SQLite và ví mặc định ngay lập tức mà không cần mở app. |
+| **Bấm `✏️ Xem chi tiết` hoặc chạm thông báo** | Ứng dụng mở ra (hỗ trợ cả Cold Start từ trạng thái tắt hoàn toàn), hiển thị ngay màn hình chi tiết để bạn kiểm tra số tiền, sửa ghi chú hoặc đổi ví/danh mục. |
+| **Bấm `❌ Bỏ qua`** | Bỏ qua giao dịch chờ và đóng thông báo mà không ghi vào sổ chi tiêu. |
+
+---
+
+## 📖 Hướng Dẫn Sử Dụng Chi Tiết (User Guide)
 
 ### 1. Quản lý Danh sách Ví (Wallets)
-- Vào tab **Ví** (Wallets): Bạn có sẵn các ví mặc định (*Tiền mặt, Tài khoản ngân hàng, Thẻ tín dụng*).
-- Bấm nút **"+"** để tạo ví mới (chọn tên ví, icon ngân hàng, màu sắc và số dư ban đầu).
-- Tính năng **Chuyển tiền giữa các ví (Transfer)**: Hỗ trợ ghi nhận khi bạn rút tiền ATM về ví tiền mặt hoặc chuyển khoản giữa các ngân hàng.
+- Vào tab **Ví**: Quản lý nhiều tài khoản ví (*Tiền mặt, Tài khoản ngân hàng, Thẻ tín dụng, Ví điện tử...*).
+- Bấm **"+"** để thêm ví mới với màu sắc và icon riêng biệt.
+- **Chuyển tiền giữa các ví (Transfer)**: Ghi nhận luân chuyển tiền (rút tiền ATM, chuyển khoản giữa các ví) mà không làm biến động tổng thu chi.
 
 ### 2. Ghi chép Thu / Chi thủ công
-- Bấm nút tròn **"+"** nổi bật ở thanh điều hướng dưới cùng.
-- Chọn loại giao dịch: **Chi tiêu (Expense)** hoặc **Thu nhập (Income)**.
-- Bàn phím số tích hợp sẵn máy tính (cộng, trừ, nhân, chia) giúp bạn tính nhanh tiền giỏ hàng/hóa đơn.
-- Chọn danh mục tương ứng và bấm **"Lưu giao dịch"**.
+- Bấm nút tròn **"+"** nổi bật ở thanh điều hướng.
+- Bàn phím số tích hợp máy tính mini (cộng, trừ, nhân, chia) hỗ trợ tính nhanh hóa đơn.
+- Chọn danh mục, ngày giờ, ví thanh toán và nhập ghi chú.
 
-### 3. Thiết lập Ngân sách Chi tiêu (Budget)
-- Vào tab **Ngân sách** (Budget):
-- Đặt hạn mức chi tiêu hàng tháng cho từng danh mục (ví dụ: *Ăn uống tối đa 4,000,000 đ/tháng*).
-- Ứng dụng sẽ tự động cảnh báo màu vàng khi bạn dùng quá 80% ngân sách và cảnh báo đỏ khi chạm ngưỡng 100%.
+### 3. Ngân sách & Hạn mức Chi tiêu (Budget)
+- Vào tab **Ngân sách**: Đặt hạn mức chi tiêu hàng tháng cho từng danh mục (*Ăn uống, Mua sắm, Di chuyển...*).
+- Theo dõi tiến độ chi tiêu theo thời gian thực: Cảnh báo vàng khi vượt 80% và cảnh báo đỏ khi chạm 100% hạn mức.
 
 ### 4. Báo cáo & Phân tích Dòng tiền (Analytics)
-- Vào tab **Báo cáo** (Analytics):
-- Xem biểu đồ tròn phân bổ chi tiêu theo danh mục.
-- Biểu đồ cột so sánh tương quan giữa Thu và Chi theo Tuần / Tháng / Quý.
-- Danh sách top các khoản chi lớn nhất trong kỳ.
+- Vào tab **Báo cáo**:
+  - Biểu đồ tròn phân bổ cơ cấu chi tiêu theo danh mục.
+  - Biểu đồ cột so sánh tương quan Thu và Chi theo Tuần / Tháng / Quý.
+  - Danh sách top các khoản chi tiêu lớn nhất trong kỳ.
 
-### 5. Sao lưu & Xuất dữ liệu (Backup & CSV)
-- Vào tab **Cài đặt** (Settings) ➔ **Sao lưu & Lưu trữ**:
-- **Xuất dữ liệu bảng tính CSV**: Xuất danh sách giao dịch ra file CSV để mở trên Microsoft Excel hoặc Google Sheets.
-- **Sao lưu cơ sở dữ liệu**: Xuất file database SQLite ra bộ nhớ máy hoặc Google Drive để khôi phục khi đổi điện thoại.
+### 5. Sao lưu, Xuất CSV & Khôi phục Dữ liệu
+- Vào tab **Cài đặt** ➔ **Sao lưu & Lưu trữ**:
+  - **Xuất bảng tính CSV**: Xem và quản lý chi tiêu trên Excel hoặc Google Sheets.
+  - **Sao lưu toàn bộ (JSON)**: Xuất file backup chứa toàn bộ ví, danh mục, giao dịch và hạn mức.
+  - **Khôi phục dữ liệu**: Nạp lại dữ liệu dễ dàng khi đổi thiết bị.
 
 ---
 
@@ -100,55 +113,15 @@
 | :--- | :--- |
 | **Framework** | [React Native 0.86](https://reactnative.dev/), [Expo SDK 57](https://expo.dev/) (New Architecture) |
 | **Routing / Navigation** | [Expo Router v57](https://docs.expo.dev/router/introduction/) (File-based Routing) |
-| **Language** | [TypeScript](https://www.typescriptlang.org/) |
+| **Language** | [TypeScript 5.x](https://www.typescriptlang.org/) |
 | **Database** | [expo-sqlite](https://docs.expo.dev/versions/latest/sdk/sqlite/) (Local SQLite Storage) |
+| **Background Tasks** | [expo-task-manager](https://docs.expo.dev/versions/latest/sdk/task-manager/), [expo-background-fetch](https://docs.expo.dev/versions/latest/sdk/background-fetch/) |
+| **Notifications** | [expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications/) (Interactive Notification Categories & Actions) |
+| **In-App Updater** | [expo-file-system](https://docs.expo.dev/versions/latest/sdk/filesystem/), [expo-intent-launcher](https://docs.expo.dev/versions/latest/sdk/intent-launcher/) |
 | **State Management** | [Zustand](https://github.com/pmndrs/zustand) |
-| **UI Components** | [React Native Paper](https://callstack.github.io/react-native-paper/), [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/), [React Native Gesture Handler](https://docs.swmansion.com/react-native-gesture-handler/) |
-| **Deep Link & Automation** | `expo-linking`, URL Scheme Integration (`expense-tracker://`) |
-| **Biometrics** | [expo-local-authentication](https://docs.expo.dev/versions/latest/sdk/local-authentication/) |
-| **Icons & Charts** | `@expo/vector-icons`, `react-native-svg`, `react-native-svg-charts` |
-| **Form & Validation** | `react-hook-form`, `zod` |
+| **UI & Animations** | [React Native Paper](https://callstack.github.io/react-native-paper/), [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/), [React Native Gesture Handler](https://docs.swmansion.com/react-native-gesture-handler/) |
+| **Forms & Validation** | `react-hook-form`, `zod` |
 | **CI/CD** | GitHub Actions (Lint, Typecheck, Build Release APK ký Keystore tự động) |
-
----
-
-## 📂 Cấu Trúc Dự Án (Project Structure)
-
-```text
-expense-tracker/
-├── .github/
-│   └── workflows/              # GitHub Actions CI & Build APK
-├── app/                        # Expo Router Pages
-│   ├── (tabs)/                 # Bottom Navigation Tabs
-│   │   ├── index.tsx           # Trang chủ & Danh sách ví
-│   │   ├── analytics.tsx       # Báo cáo thống kê & Biểu đồ
-│   │   ├── budget.tsx          # Quản lý hạn mức ngân sách
-│   │   ├── categories.tsx      # Quản lý danh mục thu/chi
-│   │   ├── wallets.tsx         # Quản lý ví tiền
-│   │   └── settings.tsx        # Cài đặt ứng dụng & Tự động hóa
-│   ├── transaction/[id].tsx    # Chi tiết giao dịch
-│   ├── transfer.tsx            # Chuyển khoản giữa các ví
-│   ├── onboarding.tsx          # Màn hình chào mừng người dùng mới
-│   └── _layout.tsx             # Root layout & Deep link listener
-├── assets/                     # Icons, splash screen, hình ảnh
-├── docs/                       # Tài liệu kiến trúc & hướng dẫn chi tiết
-│   ├── ARCHITECTURE.md         # Kiến trúc hệ thống
-│   ├── AUTO_BANK_DETECTION.md  # Chi tiết giải pháp tự động hóa ngân hàng
-│   ├── DATABASE_SCHEMA.md      # Thiết kế cơ sở dữ liệu SQLite
-│   ├── DEVELOPMENT_GUIDE.md    # Hướng dẫn cho lập trình viên
-│   └── RELEASE_GUIDE.md        # Hướng dẫn build & release APK
-├── src/
-│   ├── components/             # Reusable UI components & Dynamic Island
-│   ├── constants/              # Theme, màu sắc, danh mục mặc định
-│   ├── db/                     # SQLite schema & DB client
-│   ├── hooks/                  # Custom React hooks
-│   ├── repositories/           # Tầng truy xuất dữ liệu (Data Access Layer)
-│   ├── services/               # DeepLink, Bank Parser, Auto Categorizer, Update
-│   ├── stores/                 # Zustand state stores
-│   └── utils/                  # Tiện ích tiền tệ, ngày tháng, backup, CSV
-├── app.json                    # Cấu hình Expo
-└── package.json                # Dependencies & scripts
-```
 
 ---
 
@@ -162,7 +135,7 @@ npm install
 # Khởi động Metro Bundler
 npx expo start
 ```
-- Nhấn `a` để mở ứng dụng trên thiết bị Android Emulator hoặc điện thoại thật qua USB Debugging.
+- Nhấn `a` để chạy trên thiết bị Android Emulator hoặc điện thoại thật kết nối USB Debugging.
 
 ### 2. Kiểm tra lỗi kiểu dữ liệu (TypeScript)
 ```bash
@@ -170,15 +143,15 @@ npm run typecheck
 ```
 
 ### 3. Đóng gói APK Release với GitHub Actions
-Dự án đã tích hợp sẵn GitHub Actions workflow tại `.github/workflows/build-apk.yml`. Khi bạn tạo một tag mới (ví dụ `v1.0.2`), hệ thống sẽ:
-1. Setup môi trường Java 17 và Android SDK.
-2. Chạy `npx expo prebuild` tạo native project.
+Dự án tích hợp sẵn GitHub Actions workflow tại `.github/workflows/build-apk.yml`. Khi bạn tạo một tag mới (ví dụ `v1.0.5`), hệ thống sẽ:
+1. Cấu hình môi trường Node 22, Java 17 và Android SDK.
+2. Chạy `npx expo prebuild` tạo native project Android.
 3. Biên dịch bản Release APK với Gradle.
-4. Ký chứng chỉ tự động bằng file Keystore bí mật trên GitHub Secrets.
+4. Ký chứng chỉ tự động bằng file Keystore cấu hình trên GitHub Secrets.
 5. Đẩy file APK lên GitHub Releases để người dùng tải về cài đặt.
 
 ---
 
 ## 📄 Bản Quyền & Giấy Phép (License)
 
-Dự án được phân phối dưới giấy phép **MIT License**. Bạn hoàn toàn có thể tự do sử dụng, chỉnh sửa và đóng góp cho dự án.
+Dự án được phân phối dưới giấy phép **MIT License**. Bạn hoàn toàn có thể tự do sử dụng, tùy biến và đóng góp cho dự án.

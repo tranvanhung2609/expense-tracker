@@ -2,7 +2,7 @@
   "expo": {
     "name": "Expense Tracker",
     "slug": "expense-tracker",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "expense-tracker",
@@ -11,7 +11,7 @@
       "supportsTablet": false
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#0B0F19",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -28,6 +28,8 @@
         "WAKE_LOCK",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_DATA_SYNC",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "SCHEDULE_EXACT_ALARM",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "REQUEST_INSTALL_PACKAGES",

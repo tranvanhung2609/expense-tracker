@@ -29,7 +29,13 @@ import {
   processSepayWebhookPayload,
   SAMPLE_SEPAY_WEBHOOK,
 } from '../services/sepayService';
-import { getExpoPushToken } from '../services/systemNotificationService';
+import {
+  getExpoPushToken,
+  sendSystemTransactionNotification,
+} from '../services/systemNotificationService';
+import { requestIgnoreBatteryOptimization } from '../utils/batteryOptimization';
+import { PendingTransactionRepository } from '../repositories/PendingTransactionRepository';
+import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
 
 interface SepayConnectModalProps {
   visible: boolean;
@@ -209,6 +215,36 @@ export default function SepayConnectModal({
       }
     } catch {
       Alert.alert('Lỗi định dạng JSON', 'Chuỗi bạn nhập không phải là JSON hợp lệ.');
+    }
+  };
+
+  const handleTestStatusBarNotification = async () => {
+    try {
+      const repo = new PendingTransactionRepository();
+      const mockItem = repo.create({
+        bankPackage: 'com.VCB',
+        bankName: 'Vietcombank',
+        amount: 45000,
+        type: 'EXPENSE',
+        note: 'Cà phê Highlands Coffee',
+        suggestedCategoryId: 'cat_coffee',
+        isConfident: true,
+        rawContent: 'VCB: TK 0123456789 -45,000VND vao 15:30. ND: Highlands Coffee',
+      });
+
+      const currentList = usePendingTransactionStore.getState().pendingList;
+      usePendingTransactionStore.setState({
+        pendingList: [mockItem, ...currentList],
+      });
+
+      await sendSystemTransactionNotification(mockItem);
+
+      Alert.alert(
+        '🔔 Đã phát thông báo mẫu',
+        'Vui lòng vuốt thanh thông báo Android từ mép trên màn hình xuống để kiểm tra các nút tác vụ nhanh: [⚡ Ghi nhận ngay], [✏️ Xem chi tiết], [❌ Bỏ qua]!'
+      );
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.message || 'Không thể tạo thông báo.');
     }
   };
 
@@ -426,6 +462,82 @@ export default function SepayConnectModal({
                       )}
                     </TouchableOpacity>
                   )}
+                </View>
+
+                {/* Cài đặt chạy ngầm & Tác vụ thông báo */}
+                <View
+                  style={[
+                    styles.guideCard,
+                    {
+                      backgroundColor: theme.surfaceVariant,
+                      borderColor: '#F59E0B40',
+                      borderWidth: 1,
+                      marginBottom: SPACING.md,
+                    },
+                  ]}
+                >
+                  <View style={styles.guideHeader}>
+                    <MaterialCommunityIcons name="battery-charging" size={18} color="#F59E0B" />
+                    <Text style={[styles.guideTitle, { color: '#F59E0B' }]}>
+                      TỰ ĐỘNG CHẠY NGẦM & NHẬN THÔNG BÁO
+                    </Text>
+                  </View>
+                  <Text style={[styles.stepText, { color: theme.textSecondary, marginBottom: 8 }]}>
+                    Để Android tự động quét giao dịch và đẩy thông báo khi đóng app hoặc tắt màn hình, hãy cho phép app chạy không hạn chế pin.
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.testCard,
+                        {
+                          flex: 1,
+                          backgroundColor: '#F59E0B15',
+                          borderColor: '#F59E0B50',
+                          marginTop: 0,
+                          paddingVertical: 10,
+                          minWidth: '46%',
+                        },
+                      ]}
+                      onPress={() => requestIgnoreBatteryOptimization()}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="cog-outline" size={20} color="#F59E0B" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.testCardTitle, { color: '#F59E0B', fontSize: 12 }]}>
+                          Tắt tối ưu pin
+                        </Text>
+                        <Text style={[styles.testCardDesc, { color: theme.textSecondary, fontSize: 10 }]}>
+                          Chạy ngầm không giới hạn
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.testCard,
+                        {
+                          flex: 1,
+                          backgroundColor: '#3B82F615',
+                          borderColor: '#3B82F650',
+                          marginTop: 0,
+                          paddingVertical: 10,
+                          minWidth: '46%',
+                        },
+                      ]}
+                      onPress={handleTestStatusBarNotification}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="bell-ring-outline" size={20} color="#3B82F6" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.testCardTitle, { color: '#3B82F6', fontSize: 12 }]}>
+                          Thử thông báo
+                        </Text>
+                        <Text style={[styles.testCardDesc, { color: theme.textSecondary, fontSize: 10 }]}>
+                          Test 3 nút tác vụ nhanh
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* 3 Bước lấy Token */}

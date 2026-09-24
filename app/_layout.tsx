@@ -15,7 +15,11 @@ import DynamicIslandBanner from '../src/components/DynamicIslandBanner';
 import { useNotificationStore } from '../src/stores/notificationStore';
 import { usePendingTransactionStore } from '../src/stores/pendingTransactionStore';
 import { isSepayConfigured, isSepayAutoSyncEnabled, syncSepayTransactions } from '../src/services/sepayService';
-import { initSystemNotifications, requestSystemNotificationPermission } from '../src/services/systemNotificationService';
+import {
+  initSystemNotifications,
+  requestSystemNotificationPermission,
+  checkLastNotificationResponse,
+} from '../src/services/systemNotificationService';
 import { registerBackgroundSync } from '../src/services/backgroundSyncService';
 import { useUpdateStore } from '../src/stores/updateStore';
 import UpdateModal from '../src/components/UpdateModal';
@@ -36,8 +40,12 @@ export default function RootLayout() {
     useNotificationStore.getState().load();
     usePendingTransactionStore.getState().loadPending();
 
-    // Initialize System Notifications & Channels
-    initSystemNotifications().catch(() => {});
+    // Initialize System Notifications, Channels, and check for cold-start taps
+    initSystemNotifications()
+      .then(() => {
+        checkLastNotificationResponse().catch(() => {});
+      })
+      .catch(() => {});
     requestSystemNotificationPermission().catch(() => {});
 
     // Register Background Periodic Sync (Android WorkManager)

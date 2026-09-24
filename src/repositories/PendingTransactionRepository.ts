@@ -88,6 +88,40 @@ export class PendingTransactionRepository {
     }));
   }
 
+  getById(id: string): PendingTransaction | null {
+    const db = getDatabase();
+    const row = db.getFirstSync<{
+      id: string;
+      bank_package: string;
+      bank_name: string;
+      amount: number;
+      type: 'EXPENSE' | 'INCOME';
+      note: string;
+      suggested_category_id: string;
+      raw_content: string;
+      status: 'PENDING' | 'CONFIRMED' | 'DISMISSED';
+      created_at: string;
+    }>(
+      `SELECT * FROM pending_transactions WHERE id = ? LIMIT 1`,
+      [id]
+    );
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      bankPackage: row.bank_package,
+      bankName: row.bank_name,
+      amount: row.amount,
+      type: row.type,
+      note: row.note,
+      suggestedCategoryId: row.suggested_category_id,
+      rawContent: row.raw_content,
+      status: row.status,
+      createdAt: row.created_at,
+    };
+  }
+
   markConfirmed(id: string): void {
     const db = getDatabase();
     db.runSync(

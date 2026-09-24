@@ -36,6 +36,7 @@ import {
   syncSepayTransactions,
 } from '../../src/services/sepayService';
 import { sendSystemTransactionNotification } from '../../src/services/systemNotificationService';
+import { requestIgnoreBatteryOptimization } from '../../src/utils/batteryOptimization';
 import ConfirmModal from '../../src/components/ConfirmModal';
 import { getCurrencyConfig } from '../../src/utils/currency';
 import { MaterialIconName } from '../../src/constants/enums';
@@ -261,6 +262,18 @@ export default function SettingsScreen() {
               ) : undefined
             }
           />
+          {Platform.OS === 'android' && (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+              <SettingRow
+                icon="battery-charging"
+                iconColor="#F59E0B"
+                label="Chạy ngầm không giới hạn"
+                subtitle="Tắt tối ưu pin để tự động nhận thông báo khi đóng app"
+                onPress={() => requestIgnoreBatteryOptimization()}
+              />
+            </>
+          )}
         </View>
 
         {/* Quản lý */}

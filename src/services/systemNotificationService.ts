@@ -1,9 +1,17 @@
 import { Platform, AppState } from 'react-native';
 import Constants from 'expo-constants';
+import type * as ExpoNotifications from 'expo-notifications';
 import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
+import { PendingTransaction } from '../repositories/PendingTransactionRepository';
 
 export const SEPAY_NOTIFICATION_CHANNEL_ID = 'sepay_transactions';
 export const APP_UPDATE_CHANNEL_ID = 'app_updates';
+
+// Notification Category & Action Identifiers for Status Bar Quick Actions
+export const SEPAY_CATEGORY_ID = 'sepay_transaction_category';
+export const ACTION_CONFIRM = 'CONFIRM_TRANSACTION';
+export const ACTION_VIEW = 'VIEW_TRANSACTION';
+export const ACTION_DISMISS = 'DISMISS_TRANSACTION';
 
 // Safely require expo-notifications to prevent crashing when running in environments
 // where the native module is not yet compiled or available (e.g. older dev APK or web)
@@ -36,13 +44,104 @@ try {
 }
 
 /**
- * Initialize Android notification channels and setup listener
+ * Handle user interactions with notifications (clicking the notification body or quick action buttons)
+ */
+export async function handleNotificationResponse(response: ExpoNotifications.NotificationResponse): Promise<void> {
+  if (!response) return;
+
+  try {
+    const actionId = response.actionIdentifier;
+    const data = response.notification?.request?.content?.data as Record<string, any> | undefined;
+
+    if (!data) return;
+
+    if (data.type === 'APP_UPDATE') {
+      const { useUpdateStore } = require('../stores/updateStore');
+      useUpdateStore.getState().openModal();
+      return;
+    }
+
+    const pendingId = data.pendingId as string | undefined;
+    let item: PendingTransaction | null = null;
+
+    if (pendingId) {
+      // 1. Try finding in in-memory store
+      item = usePendingTransactionStore
+        .getState()
+        .pendingList.find((p) => p.id === pendingId) || null;
+
+      // 2. Fallback to direct SQLite lookup (crucial for cold boot from killed app!)
+      if (!item) {
+        const { PendingTransactionRepository } = require('../repositories/PendingTransactionRepository');
+        const repo = new PendingTransactionRepository();
+        item = repo.getById(pendingId);
+      }
+    } else if (
+      data.transferAmount ||
+      data.amount_out ||
+      data.amount_in ||
+      data.content ||
+      data.referenceCode
+    ) {
+      // Webhook payload directly attached
+      const { processSepayWebhookPayload } = require('./sepayService');
+      const res = processSepayWebhookPayload(data);
+      if (res?.item) {
+        item = res.item;
+      }
+    }
+
+    if (!item) {
+      // Refresh pending list if item was not found
+      usePendingTransactionStore.getState().loadPending();
+      return;
+    }
+
+    // Process user action from status bar
+    if (actionId === ACTION_CONFIRM) {
+      // ⚡ Tác vụ nhanh: Ghi nhận ngay vào sổ chi tiêu
+      console.log(`[SystemNotification] User clicked Quick Confirm for transaction ${item.id}`);
+      usePendingTransactionStore.getState().confirmPending(item.id);
+    } else if (actionId === ACTION_DISMISS) {
+      // ❌ Tác vụ nhanh: Bỏ qua giao dịch này
+      console.log(`[SystemNotification] User clicked Dismiss for transaction ${item.id}`);
+      usePendingTransactionStore.getState().dismissPending(item.id);
+    } else {
+      // Chạm trực tiếp vào thân thông báo hoặc chọn "Xem chi tiết"
+      console.log(`[SystemNotification] User opened transaction ${item.id}`);
+      usePendingTransactionStore.setState({ activeBannerItem: item });
+    }
+  } catch (err) {
+    console.warn('[SystemNotification] Failed to handle notification response:', err);
+  }
+}
+
+/**
+ * Check if the app was launched by tapping a notification while closed/killed (Cold Start)
+ */
+export async function checkLastNotificationResponse(): Promise<void> {
+  if (!Notifications) return;
+
+  try {
+    const lastResponse = await Notifications.getLastNotificationResponseAsync();
+    if (lastResponse) {
+      console.log('[SystemNotification] Found cold start notification response.');
+      await handleNotificationResponse(lastResponse);
+    }
+  } catch (err) {
+    console.warn('[SystemNotification] Failed to check last notification response:', err);
+  }
+}
+
+/**
+ * Initialize Android notification channels, interactive categories, and setup listeners
  */
 export async function initSystemNotifications(): Promise<void> {
   if (!Notifications) return;
 
   try {
     if (Platform.OS === 'android') {
+      // 1. Transaction Notification Channel (High priority, heads-up banner)
       await Notifications.setNotificationChannelAsync(SEPAY_NOTIFICATION_CHANNEL_ID, {
         name: 'Biến động số dư SePay',
         importance: Notifications.AndroidImportance.MAX,
@@ -53,6 +152,7 @@ export async function initSystemNotifications(): Promise<void> {
         showBadge: true,
       });
 
+      // 2. App Update Channel
       await Notifications.setNotificationChannelAsync(APP_UPDATE_CHANNEL_ID, {
         name: 'Cập nhật ứng dụng',
         importance: Notifications.AndroidImportance.HIGH,
@@ -64,37 +164,35 @@ export async function initSystemNotifications(): Promise<void> {
       });
     }
 
-    // Handle when user taps notification from status bar / lock screen
-    Notifications.addNotificationResponseReceivedListener((response) => {
-      try {
-        const data = response.notification.request.content.data;
-        if (data?.type === 'APP_UPDATE') {
-          const { useUpdateStore } = require('../stores/updateStore');
-          useUpdateStore.getState().openModal();
-        } else if (data?.pendingId) {
-          const item = usePendingTransactionStore
-            .getState()
-            .pendingList.find((p) => p.id === data.pendingId);
-          if (item) {
-            usePendingTransactionStore.setState({ activeBannerItem: item });
-          }
-        } else if (
-          data &&
-          (data.transferAmount || data.amount_out || data.amount_in || data.content || data.referenceCode)
-        ) {
-          // Xử lý gói tin Webhook đẩy trực tiếp qua Push Notification (Realtime khi đóng app!)
-          const { processSepayWebhookPayload } = require('./sepayService');
-          const res = processSepayWebhookPayload(data);
-          if (res?.item) {
-            usePendingTransactionStore.setState({ activeBannerItem: res.item });
-          }
-        }
-      } catch (err) {
-        console.warn('[SystemNotification] Failed to handle notification tap:', err);
-      }
-    });
+    // 3. Register Interactive Notification Actions on the Notification Bar (Thanh thông báo)
+    await Notifications.setNotificationCategoryAsync(SEPAY_CATEGORY_ID, [
+      {
+        identifier: ACTION_CONFIRM,
+        buttonTitle: '⚡ Ghi nhận ngay',
+        options: {
+          opensAppToForeground: true,
+        },
+      },
+      {
+        identifier: ACTION_VIEW,
+        buttonTitle: '✏️ Xem chi tiết',
+        options: {
+          opensAppToForeground: true,
+        },
+      },
+      {
+        identifier: ACTION_DISMISS,
+        buttonTitle: '❌ Bỏ qua',
+        options: {
+          opensAppToForeground: false,
+        },
+      },
+    ]);
 
-    // Handle when push notification arrives while app is open
+    // 4. Setup listener for notification responses when app is in memory
+    Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
+    // 5. Handle when push notification arrives while app is open
     Notifications.addNotificationReceivedListener((notification) => {
       try {
         const data = notification.request.content.data;
@@ -110,7 +208,7 @@ export async function initSystemNotifications(): Promise<void> {
       }
     });
   } catch (err) {
-    console.warn('[SystemNotification] Failed to initialize notification channels:', err);
+    console.warn('[SystemNotification] Failed to initialize notification channels & categories:', err);
   }
 }
 
@@ -166,7 +264,7 @@ function formatAmount(amount: number): string {
 }
 
 /**
- * Send an immediate Android system notification to lock screen & status bar
+ * Send an immediate Android system notification to lock screen & status bar with Interactive Action Buttons
  */
 export async function sendSystemTransactionNotification(item: {
   bankName: string;
@@ -192,9 +290,16 @@ export async function sendSystemTransactionNotification(item: {
       content: {
         title,
         body,
-        data: { pendingId: item.id },
+        data: {
+          pendingId: item.id,
+          bankName: item.bankName,
+          amount: item.amount,
+          type: item.type,
+          note: item.note,
+        },
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.MAX,
+        categoryIdentifier: SEPAY_CATEGORY_ID,
         ...(Platform.OS === 'android'
           ? {
               channelId: SEPAY_NOTIFICATION_CHANNEL_ID,
@@ -212,8 +317,8 @@ export async function sendSystemTransactionNotification(item: {
 /**
  * Gửi thông báo hệ thống thông minh (Smart Notifications):
  * - Nếu App đang mở (Foreground / Active): Không gửi alert hệ thống vì Dynamic Island trong app đã xử lý xuất sắc.
- * - Nếu App đang tắt hoặc chạy nền (Background): Bắn thông báo ra màn hình khóa & status bar.
- * - Nếu có nhiều giao dịch (> 1): Gom nhóm (batch) thành 1 thông báo tóm tắt thay vì spam nhiều lần.
+ * - Nếu App đang tắt hoặc chạy nền (Background): Bắn thông báo ra màn hình khóa & status bar kèm các nút tác vụ nhanh.
+ * - Nếu có nhiều giao dịch (> 3): Gom nhóm (batch) thành 1 thông báo tóm tắt thay vì spam nhiều lần.
  */
 export async function sendSystemTransactionNotifications(
   items: Array<{
@@ -232,10 +337,13 @@ export async function sendSystemTransactionNotifications(
   }
 
   try {
-    if (items.length === 1) {
-      await sendSystemTransactionNotification(items[0]);
+    if (items.length <= 3) {
+      // Gửi riêng từng giao dịch để người dùng có đầy đủ các nút bấm [⚡ Ghi nhận] [✏️ Sửa] [❌ Bỏ qua]
+      for (const item of items) {
+        await sendSystemTransactionNotification(item);
+      }
     } else {
-      // Gom nhóm nhiều giao dịch
+      // Gom nhóm nhiều giao dịch (> 3 giao dịch)
       const count = items.length;
       const totalAmount = items.reduce((sum, i) => sum + (i.amount || 0), 0);
       const title = `🔔 Phát hiện ${count} biến động số dư ngân hàng mới`;
@@ -248,6 +356,7 @@ export async function sendSystemTransactionNotifications(
           data: { pendingId: items[0].id },
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority.MAX,
+          categoryIdentifier: SEPAY_CATEGORY_ID,
           ...(Platform.OS === 'android'
             ? {
                 channelId: SEPAY_NOTIFICATION_CHANNEL_ID,
@@ -297,5 +406,3 @@ export async function sendSystemUpdateNotification(release: {
     console.warn('[SystemNotification] Failed to send update notification:', err);
   }
 }
-
-
