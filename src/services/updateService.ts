@@ -1,4 +1,5 @@
 import { Platform, Linking, Alert } from 'react-native';
+import Constants from 'expo-constants';
 import { createMMKV } from '../utils/storage';
 import { useNotificationStore } from '../stores/notificationStore';
 import { NOTIFICATION_TYPES } from '../constants/enums';
@@ -28,6 +29,8 @@ const DEFAULT_DISTRIBUTOR_URL =
 
 export function getAppCurrentVersion(): string {
   try {
+    const expoVersion = Constants.expoConfig?.version;
+    if (expoVersion) return expoVersion;
     const appConfig = require('../../app.json');
     return appConfig?.expo?.version ?? '1.0.0';
   } catch {
@@ -89,11 +92,23 @@ export async function checkAppUpdate(isManual = false): Promise<CheckUpdateResul
 
     if (!response.ok) {
       if (response.status === 404) {
-        // No release found yet on GitHub
         return {
           hasUpdate: false,
           currentVersion,
           release: null,
+          error: isManual
+            ? 'Không tìm thấy bản phát hành trên GitHub (Mã 404). Nguyên nhân: Repository đang ở chế độ Private (Riêng tư) nên ứng dụng không thể truy cập, hoặc chưa tạo bản Release.'
+            : undefined,
+        };
+      }
+      if (response.status === 403) {
+        return {
+          hasUpdate: false,
+          currentVersion,
+          release: null,
+          error: isManual
+            ? 'GitHub giới hạn tần suất yêu cầu (Mã 403). Vui lòng thử lại sau ít phút.'
+            : undefined,
         };
       }
       throw new Error(`Máy chủ phản hồi mã ${response.status}`);

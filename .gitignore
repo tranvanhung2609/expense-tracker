@@ -36,8 +36,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env & secret files
+.env
+.env.*
+*.secret
+*.token
+google-service*.json
 
 # typescript
 *.tsbuildinfo
