@@ -23,6 +23,7 @@ build/
 
 # Credentials & signing keys — NEVER commit these
 credentials/
+docs/
 
 # Metro
 .metro-health-check*
