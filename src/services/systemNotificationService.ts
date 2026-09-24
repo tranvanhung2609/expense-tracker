@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
 
 export const SEPAY_NOTIFICATION_CHANNEL_ID = 'sepay_transactions';
+export const APP_UPDATE_CHANNEL_ID = 'app_updates';
 
 // Safely require expo-notifications to prevent crashing when running in environments
 // where the native module is not yet compiled or available (e.g. older dev APK or web)
@@ -51,13 +52,26 @@ export async function initSystemNotifications(): Promise<void> {
         enableVibrate: true,
         showBadge: true,
       });
+
+      await Notifications.setNotificationChannelAsync(APP_UPDATE_CHANNEL_ID, {
+        name: 'Cập nhật ứng dụng',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#4F46E5',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
     }
 
     // Handle when user taps notification from status bar / lock screen
     Notifications.addNotificationResponseReceivedListener((response) => {
       try {
         const data = response.notification.request.content.data;
-        if (data?.pendingId) {
+        if (data?.type === 'APP_UPDATE') {
+          const { useUpdateStore } = require('../stores/updateStore');
+          useUpdateStore.getState().openModal();
+        } else if (data?.pendingId) {
           const item = usePendingTransactionStore
             .getState()
             .pendingList.find((p) => p.id === data.pendingId);
@@ -248,4 +262,40 @@ export async function sendSystemTransactionNotifications(
     console.warn('[SystemNotification] Failed to schedule batch notifications:', err);
   }
 }
+
+/**
+ * Send an immediate system notification for a newly available app update
+ */
+export async function sendSystemUpdateNotification(release: {
+  version: string;
+  title: string;
+  changelog?: string[];
+}): Promise<void> {
+  if (!Notifications) return;
+
+  try {
+    const title = `🚀 Có bản cập nhật mới v${release.version}`;
+    const body = `${release.title || 'Nâng cấp tính năng mới và sửa lỗi'}. Chạm để cập nhật ngay!`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: 'APP_UPDATE', version: release.version },
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        ...(Platform.OS === 'android'
+          ? {
+              channelId: APP_UPDATE_CHANNEL_ID,
+              color: '#4F46E5',
+            }
+          : {}),
+      },
+      trigger: null,
+    });
+  } catch (err) {
+    console.warn('[SystemNotification] Failed to send update notification:', err);
+  }
+}
+
 

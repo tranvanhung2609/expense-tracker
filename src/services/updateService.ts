@@ -1,5 +1,9 @@
 import { Platform, Linking, Alert } from 'react-native';
 import Constants from 'expo-constants';
+import { File, Paths } from 'expo-file-system';
+import { getContentUriAsync } from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
 import { createMMKV } from '../utils/storage';
 import { useNotificationStore } from '../stores/notificationStore';
 import { NOTIFICATION_TYPES } from '../constants/enums';
@@ -15,6 +19,9 @@ export interface ReleaseInfo {
   downloadUrl: string;
   mandatory: boolean;
   minSupportedVersion?: string;
+  apkSize?: number;
+  apkName?: string;
+  isDirectApk?: boolean;
 }
 
 export interface CheckUpdateResult {
@@ -22,6 +29,12 @@ export interface CheckUpdateResult {
   currentVersion: string;
   release: ReleaseInfo | null;
   error?: string;
+}
+
+export interface DownloadProgress {
+  bytesWritten: number;
+  totalBytes: number;
+  percent: number;
 }
 
 const DEFAULT_DISTRIBUTOR_URL =
@@ -52,6 +65,22 @@ export function isAutoCheckEnabled(): boolean {
 
 export function setAutoCheckEnabled(enabled: boolean): void {
   storage.set('auto_check_updates', enabled);
+}
+
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+export function getUpdateApkFileName(version: string, apkName?: string): string {
+  if (apkName && apkName.toLowerCase().endsWith('.apk')) {
+    return apkName;
+  }
+  return `ExpenseTracker_v${version}.apk`;
 }
 
 /**
@@ -130,6 +159,8 @@ export async function checkAppUpdate(isManual = false): Promise<CheckUpdateResul
             .filter((l: string) => l.length > 0)
         : ['Cập nhật tính năng và sửa lỗi ổn định.'];
 
+      const isDirectApk = Boolean(apkAsset && apkAsset.browser_download_url);
+
       releaseData = {
         version: data.tag_name.replace(/^v/i, ''),
         versionCode: 1,
@@ -138,10 +169,16 @@ export async function checkAppUpdate(isManual = false): Promise<CheckUpdateResul
         changelog: changelogLines,
         downloadUrl: apkAsset ? apkAsset.browser_download_url : data.html_url,
         mandatory: false,
+        apkSize: apkAsset?.size,
+        apkName: apkAsset?.name,
+        isDirectApk,
       };
     } else {
       // Standard version.json format
       releaseData = data as ReleaseInfo;
+      if (releaseData.downloadUrl && releaseData.downloadUrl.toLowerCase().endsWith('.apk')) {
+        releaseData.isDirectApk = true;
+      }
     }
 
     const hasUpdate = compareSemver(releaseData.version, currentVersion) > 0;
@@ -188,6 +225,159 @@ export async function checkAppUpdate(isManual = false): Promise<CheckUpdateResul
   }
 }
 
+/**
+ * Check if the APK for the given release was already downloaded and is ready in cache
+ */
+export async function checkExistingDownloadedUpdate(release: ReleaseInfo): Promise<string | null> {
+  if (Platform.OS !== 'android') return null;
+  try {
+    const fileName = getUpdateApkFileName(release.version, release.apkName);
+    const file = new File(Paths.cache, fileName);
+    if (file.exists && file.size && file.size > 100000) {
+      if (release.apkSize && Math.abs(file.size - release.apkSize) > 1024) {
+        return null;
+      }
+      return file.uri;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Download APK file directly inside the app with real-time progress updates
+ */
+export async function downloadAppUpdate(
+  release: ReleaseInfo,
+  onProgress: (progress: DownloadProgress) => void,
+  abortSignal?: AbortSignal
+): Promise<{ success: boolean; fileUri?: string; error?: string }> {
+  if (Platform.OS !== 'android') {
+    return {
+      success: false,
+      error: 'Tải trực tiếp trong ứng dụng chỉ hỗ trợ trên thiết bị Android.',
+    };
+  }
+
+  try {
+    const fileName = getUpdateApkFileName(release.version, release.apkName);
+    const targetFile = new File(Paths.cache, fileName);
+
+    // Delete old/incomplete file if already exists
+    if (targetFile.exists) {
+      try {
+        await targetFile.delete();
+      } catch {}
+    }
+
+    const expectedTotal = release.apkSize || 0;
+
+    await File.downloadFileAsync(release.downloadUrl, targetFile, {
+      idempotent: true,
+      signal: abortSignal,
+      onProgress: (data: { bytesWritten: number; totalBytes: number }) => {
+        const total = data.totalBytes > 0 ? data.totalBytes : expectedTotal;
+        const percent = total > 0 ? Math.min(100, Math.round((data.bytesWritten / total) * 100)) : 0;
+        onProgress({
+          bytesWritten: data.bytesWritten,
+          totalBytes: total,
+          percent,
+        });
+      },
+    });
+
+    if (!targetFile.exists) {
+      throw new Error('Tệp tải về không tồn tại.');
+    }
+
+    return {
+      success: true,
+      fileUri: targetFile.uri,
+    };
+  } catch (err: any) {
+    if (abortSignal?.aborted || err?.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Đã hủy tải bản cập nhật.',
+      };
+    }
+    return {
+      success: false,
+      error: err?.message || 'Lỗi khi tải tệp cập nhật.',
+    };
+  }
+}
+
+/**
+ * Trigger the Android system Package Installer with the downloaded APK
+ */
+export async function installApk(fileUri: string): Promise<{ success: boolean; error?: string }> {
+  if (Platform.OS !== 'android') {
+    return {
+      success: false,
+      error: 'Tính năng cài đặt gói APK chỉ hỗ trợ trên thiết bị Android.',
+    };
+  }
+
+  try {
+    const contentUri = await getContentUriAsync(fileUri);
+
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: contentUri,
+      flags: 1, // Intent.FLAG_GRANT_READ_URI_PERMISSION
+      type: 'application/vnd.android.package-archive',
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Lỗi khi mở trình cài đặt APK:', err);
+
+    // Try sharing fallback
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/vnd.android.package-archive',
+          dialogTitle: 'Mở bản cài đặt ứng dụng',
+        });
+        return { success: true };
+      }
+    } catch {}
+
+    return {
+      success: false,
+      error:
+        err?.message ||
+        'Không thể mở trình cài đặt. Vui lòng cấp quyền cho phép cài đặt ứng dụng từ nguồn không xác định trong Cài đặt hệ thống.',
+    };
+  }
+}
+
+/**
+ * Open Android Settings to allow installing unknown apps from this source
+ */
+export async function openUnknownAppSourcesSettings(): Promise<void> {
+  if (Platform.OS === 'android') {
+    try {
+      await IntentLauncher.startActivityAsync(
+        IntentLauncher.ActivityAction.MANAGE_UNKNOWN_APP_SOURCES,
+        {
+          data: 'package:com.expensetracker.app',
+        }
+      );
+    } catch {
+      try {
+        await IntentLauncher.startActivityAsync(
+          IntentLauncher.ActivityAction.MANAGE_UNKNOWN_APP_SOURCES
+        );
+      } catch (err) {
+        console.warn('Cannot open unknown app sources setting:', err);
+      }
+    }
+  }
+}
+
 export async function openDownloadUrl(url: string): Promise<boolean> {
   if (!url) return false;
   try {
@@ -204,3 +394,4 @@ export async function openDownloadUrl(url: string): Promise<boolean> {
     return false;
   }
 }
+

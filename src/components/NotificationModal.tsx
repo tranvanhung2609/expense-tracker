@@ -52,6 +52,15 @@ export default function NotificationModal({ visible, onClose }: NotificationModa
 
   const handleTapItem = (item: AppNotification) => {
     markAsRead(item.id);
+    if (item.type === 'APP_UPDATE') {
+      onClose();
+      setTimeout(() => {
+        const { useUpdateStore } = require('../stores/updateStore');
+        useUpdateStore.getState().openModal();
+      }, 150);
+      return;
+    }
+
     if (item.actionUrl === 'pending_transactions') {
       onClose();
       const pendingList = usePendingTransactionStore.getState().pendingList;

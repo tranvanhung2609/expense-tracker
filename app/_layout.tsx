@@ -15,14 +15,16 @@ import DynamicIslandBanner from '../src/components/DynamicIslandBanner';
 import { useNotificationStore } from '../src/stores/notificationStore';
 import { usePendingTransactionStore } from '../src/stores/pendingTransactionStore';
 import { isSepayConfigured, isSepayAutoSyncEnabled, syncSepayTransactions } from '../src/services/sepayService';
-import { checkAppUpdate, isAutoCheckEnabled } from '../src/services/updateService';
 import { initSystemNotifications, requestSystemNotificationPermission } from '../src/services/systemNotificationService';
 import { registerBackgroundSync } from '../src/services/backgroundSyncService';
+import { useUpdateStore } from '../src/stores/updateStore';
+import UpdateModal from '../src/components/UpdateModal';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   const { isDarkMode, isOnboardingDone } = useSettingsStore();
+  const { isModalVisible, release, closeModal, checkAndPromptUpdate } = useUpdateStore();
 
   useEffect(() => {
     // Initialize DB and seed on first run
@@ -73,12 +75,10 @@ export default function RootLayout() {
       syncInterval = setInterval(runSepaySync, 25000);
     }
 
-    // Background update check if enabled
-    if (isAutoCheckEnabled()) {
-      setTimeout(() => {
-        checkAppUpdate(false).catch(() => {});
-      }, 2500);
-    }
+    // Auto-check for updates every time app opens (if enabled)
+    const updateCheckTimer = setTimeout(() => {
+      checkAndPromptUpdate(false).catch(() => {});
+    }, 1500);
 
     // Navigate to onboarding if first run
     let onboardingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,6 +92,7 @@ export default function RootLayout() {
       appStateSub.remove();
       if (syncInterval) clearInterval(syncInterval);
       if (onboardingTimer) clearTimeout(onboardingTimer);
+      clearTimeout(updateCheckTimer);
     };
   }, []);
 
@@ -113,6 +114,13 @@ export default function RootLayout() {
               }}
             />
           </Stack>
+
+          {/* Global Update Modal - Prompts on app launch if new version is found */}
+          <UpdateModal
+            visible={isModalVisible}
+            release={release}
+            onClose={() => closeModal(true)}
+          />
         </PaperProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>

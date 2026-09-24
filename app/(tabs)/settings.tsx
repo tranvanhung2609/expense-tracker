@@ -20,18 +20,11 @@ import { useSettingsStore } from '../../src/stores/settingsStore';
 import { useTransactionStore } from '../../src/stores/transactionStore';
 import { useWalletStore } from '../../src/stores/walletStore';
 import { useCategoryStore } from '../../src/stores/categoryStore';
-import { usePendingTransactionStore } from '../../src/stores/pendingTransactionStore';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
 import { exportDatabaseToJSON, restoreDatabaseFromJSONString } from '../../src/utils/backup';
 import { resetDatabase } from '../../src/db/schema';
-import {
-  checkAppUpdate,
-  getAppCurrentVersion,
-  ReleaseInfo,
-  isAutoCheckEnabled,
-  setAutoCheckEnabled,
-} from '../../src/services/updateService';
-import UpdateModal from '../../src/components/UpdateModal';
+import { getAppCurrentVersion } from '../../src/services/updateService';
+import { useUpdateStore } from '../../src/stores/updateStore';
 import CurrencyPickerModal from '../../src/components/CurrencyPickerModal';
 import RestoreModal from '../../src/components/RestoreModal';
 import PrivacyModal from '../../src/components/PrivacyModal';
@@ -95,19 +88,14 @@ export default function SettingsScreen() {
   const { transactions, loadAll } = useTransactionStore();
   const { load: loadWallets } = useWalletStore();
   const { load: loadCategories } = useCategoryStore();
+
   const {
-    simulateBankNotification,
-  } = usePendingTransactionStore();
-
-  const handleTestSimulator = () => {
-    simulateBankNotification();
-    // Dynamic Island Banner sẽ trượt xuống thanh lịch từ mép trên màn hình
-    // Không hiện modal chắn ngang hay alert hệ thống khi người dùng đang ở trong app!
-  };
-
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateRelease, setUpdateRelease] = useState<ReleaseInfo | null>(null);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+    isChecking: isCheckingUpdate,
+    checkAndPromptUpdate,
+    setAutoCheck,
+    isAutoCheck,
+  } = useUpdateStore();
+  const [autoCheck, setAutoCheckState] = useState(() => isAutoCheck());
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -115,7 +103,6 @@ export default function SettingsScreen() {
   const [showSepayModal, setShowSepayModal] = useState(false);
   const [sepayConfigured, setSepayConfigured] = useState(() => isSepayConfigured());
   const [isSyncingSepay, setIsSyncingSepay] = useState(false);
-  const [autoCheck, setAutoCheck] = useState(() => isAutoCheckEnabled());
   const [confirmConfig, setConfirmConfig] = useState<{
     visible: boolean;
     title: string;
@@ -167,31 +154,24 @@ export default function SettingsScreen() {
   };
 
   const handleCheckUpdate = async () => {
-    setIsCheckingUpdate(true);
     try {
-      const result = await checkAppUpdate(true);
-      setIsCheckingUpdate(false);
-
-      if (result.hasUpdate && result.release) {
-        setUpdateRelease(result.release);
-        setShowUpdateModal(true);
-      } else if (result.error) {
-        Alert.alert('Thông báo', result.error);
-      } else {
+      const result = await checkAndPromptUpdate(true);
+      if (!result.hasUpdate && !result.error) {
         Alert.alert(
           'Phiên bản mới nhất',
           `Bạn đang sử dụng phiên bản ${currentVersion}, không có bản cập nhật mới nào từ nhà phân phối.`
         );
+      } else if (result.error) {
+        Alert.alert('Thông báo', result.error);
       }
-    } catch (err: any) {
-      setIsCheckingUpdate(false);
+    } catch {
       Alert.alert('Lỗi', 'Không thể kết nối đến nhà phân phối.');
     }
   };
 
   const handleToggleAutoCheck = (value: boolean) => {
+    setAutoCheckState(value);
     setAutoCheck(value);
-    setAutoCheckEnabled(value);
   };
 
 
@@ -280,16 +260,6 @@ export default function SettingsScreen() {
                 <ActivityIndicator size="small" color="#10B981" />
               ) : undefined
             }
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-
-          {/* 3. Thử nghiệm Dynamic Island */}
-          <SettingRow
-            icon="lightning-bolt"
-            iconColor="#F59E0B"
-            label="Thử nghiệm Dynamic Island"
-            subtitle="Bắn 1 giao dịch mẫu (-65,000 đ) để kiểm tra thanh nổi Dynamic Island"
-            onPress={handleTestSimulator}
           />
         </View>
 
@@ -475,13 +445,6 @@ export default function SettingsScreen() {
       <UserGuideModal
         visible={showGuideModal}
         onClose={() => setShowGuideModal(false)}
-      />
-
-      {/* Update Modal */}
-      <UpdateModal
-        visible={showUpdateModal}
-        release={updateRelease}
-        onClose={() => setShowUpdateModal(false)}
       />
 
       {/* Currency Modal */}

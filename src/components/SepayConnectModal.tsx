@@ -531,7 +531,7 @@ export default function SepayConnectModal({
                       Bắn Thử Nghiệm Giao Dịch SePay Mẫu
                     </Text>
                     <Text style={[styles.testCardDesc, { color: theme.textSecondary }]}>
-                      Tạo ngay 1 giao dịch mẫu (VCB -65,000 đ) kiểm tra hiệu ứng Dynamic Island
+                      Tạo ngay 1 giao dịch mẫu (VCB -65,000 đ) kiểm tra kết nối Webhook
                     </Text>
                   </View>
                 </TouchableOpacity>
