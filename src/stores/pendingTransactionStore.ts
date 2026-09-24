@@ -119,11 +119,11 @@ export const usePendingTransactionStore = create<PendingTransactionState>((set, 
     // 3. Mark confirmed in SQLite
     repo.markConfirmed(id);
 
-    // 4. Update store state
+    // 4. Update store state: nếu còn giao dịch chờ khác, chuyển tiếp sang giao dịch tiếp theo
     const remaining = get().pendingList.filter(p => p.id !== id);
     set({
       pendingList: remaining,
-      activeBannerItem: get().activeBannerItem?.id === id ? null : get().activeBannerItem,
+      activeBannerItem: get().activeBannerItem?.id === id ? (remaining[0] || null) : get().activeBannerItem,
     });
   },
 
@@ -132,7 +132,7 @@ export const usePendingTransactionStore = create<PendingTransactionState>((set, 
     const remaining = get().pendingList.filter(p => p.id !== id);
     set({
       pendingList: remaining,
-      activeBannerItem: get().activeBannerItem?.id === id ? null : get().activeBannerItem,
+      activeBannerItem: get().activeBannerItem?.id === id ? (remaining[0] || null) : get().activeBannerItem,
     });
   },
 

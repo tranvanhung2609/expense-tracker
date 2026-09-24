@@ -3,7 +3,7 @@ import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
 import { PendingTransactionRepository, PendingTransaction } from '../repositories/PendingTransactionRepository';
 import { suggestCategory } from './autoCategorizer';
 import { useNotificationStore } from '../stores/notificationStore';
-import { sendSystemTransactionNotification } from './systemNotificationService';
+import { sendSystemTransactionNotifications } from './systemNotificationService';
 
 const storage = createMMKV({ id: 'sepay-settings' });
 const pendingRepo = new PendingTransactionRepository();
@@ -253,9 +253,9 @@ export function processSepayWebhookPayload(payload: Partial<SepayWebhookPayload>
     activeBannerItem: created, // Instantly trigger Dynamic Island banner!
   });
 
-  // Also notify in-app notification center & Android system notification
+  // Also notify in-app notification center & smart system notification
   useNotificationStore.getState().notifyPendingTransaction(created);
-  sendSystemTransactionNotification(created).catch(() => {});
+  sendSystemTransactionNotifications([created]).catch(() => {});
 
   return { success: true, item: created };
 }
@@ -416,11 +416,12 @@ export async function syncSepayTransactions(): Promise<{
         activeBannerItem: newPendingItems[0], // Instantly pop Dynamic Island!
       });
 
-      // Also notify in-app notification center & Android system notification
+      // Also notify in-app notification center
       for (const item of newPendingItems) {
         useNotificationStore.getState().notifyPendingTransaction(item);
-        sendSystemTransactionNotification(item).catch(() => {});
       }
+      // Smart system notification: suppressed if app is active, grouped if multiple items
+      sendSystemTransactionNotifications(newPendingItems).catch(() => {});
     }
 
     return {

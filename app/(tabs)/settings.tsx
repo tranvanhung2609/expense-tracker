@@ -100,17 +100,9 @@ export default function SettingsScreen() {
   } = usePendingTransactionStore();
 
   const handleTestSimulator = () => {
-    const item = simulateBankNotification();
-    sendSystemTransactionNotification(item).catch(() => {});
-    setConfirmConfig({
-      visible: true,
-      title: '⚡ Đã kích hoạt giả lập!',
-      message: `Đã phát hiện biến động từ ${item.bankName}: ${item.note}.\n\nThanh Dynamic Island & Thông báo Android đã được gửi đến thanh trạng thái!`,
-      type: 'primary',
-      confirmText: 'Xem ngay',
-      cancelText: undefined,
-      onConfirm: () => setConfirmConfig(null),
-    });
+    simulateBankNotification();
+    // Dynamic Island Banner sẽ trượt xuống thanh lịch từ mép trên màn hình
+    // Không hiện modal chắn ngang hay alert hệ thống khi người dùng đang ở trong app!
   };
 
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);

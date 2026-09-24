@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { lightTheme, darkTheme } from '../src/constants/theme';
 import { initDatabase } from '../src/db/schema';
 import { useTransactionStore } from '../src/stores/transactionStore';
@@ -41,11 +41,36 @@ export default function RootLayout() {
     // Register Background Periodic Sync (Android WorkManager)
     registerBackgroundSync().catch(() => {});
 
-    // Auto-sync SePay transactions in background if enabled
-    if (isSepayConfigured() && isSepayAutoSyncEnabled()) {
-      setTimeout(() => {
+    // Smart Foreground Sync & Polling:
+    // 1. Đồng bộ khi mở app
+    // 2. Tự động đồng bộ ngay khi chuyển từ app ngân hàng (MB, VCB...) quay lại app này
+    // 3. Định kỳ thăm dò nhẹ mỗi 25s khi đang mở app
+    let syncInterval: ReturnType<typeof setInterval> | null = null;
+
+    const runSepaySync = () => {
+      if (isSepayConfigured() && isSepayAutoSyncEnabled()) {
         syncSepayTransactions().catch(() => {});
-      }, 1500);
+      }
+    };
+
+    setTimeout(runSepaySync, 1200);
+
+    const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        runSepaySync();
+        if (!syncInterval) {
+          syncInterval = setInterval(runSepaySync, 25000);
+        }
+      } else {
+        if (syncInterval) {
+          clearInterval(syncInterval);
+          syncInterval = null;
+        }
+      }
+    });
+
+    if (AppState.currentState === 'active') {
+      syncInterval = setInterval(runSepaySync, 25000);
     }
 
     // Background update check if enabled
@@ -56,13 +81,18 @@ export default function RootLayout() {
     }
 
     // Navigate to onboarding if first run
+    let onboardingTimer: ReturnType<typeof setTimeout> | null = null;
     if (!isOnboardingDone()) {
-      // Small delay to let layout mount
-      const timer = setTimeout(() => {
+      onboardingTimer = setTimeout(() => {
         router.replace('/onboarding');
       }, 100);
-      return () => clearTimeout(timer);
     }
+
+    return () => {
+      appStateSub.remove();
+      if (syncInterval) clearInterval(syncInterval);
+      if (onboardingTimer) clearTimeout(onboardingTimer);
+    };
   }, []);
 
   const theme = isDarkMode ? darkTheme : lightTheme;

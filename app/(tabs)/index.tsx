@@ -8,6 +8,8 @@ import {
   TextInput,
   StatusBar,
   Platform,
+  RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,6 +30,7 @@ import { formatVND, formatCompact } from '../../src/utils/currency';
 import { groupTransactionsByDate, formatDateHeader } from '../../src/utils/date';
 import { TransactionWithDetails } from '../../src/repositories/TransactionRepository';
 import { startOfMonth, endOfMonth } from 'date-fns';
+import { isSepayConfigured, syncSepayTransactions } from '../../src/services/sepayService';
 
 type FilterType = 'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER';
 
@@ -45,6 +48,22 @@ export default function DashboardScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handlePullRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      loadAll();
+      refreshBalances();
+      loadNotifs();
+      usePendingTransactionStore.getState().loadPending();
+      if (isSepayConfigured()) {
+        await syncSepayTransactions().catch(() => {});
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadAll, refreshBalances, loadNotifs]);
 
   // Check mandatory privacy consent after onboarding
   React.useEffect(() => {
@@ -445,6 +464,14 @@ export default function DashboardScreen() {
           sections={sections}
           keyExtractor={item => item.id}
           stickySectionHeadersEnabled={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handlePullRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
+            />
+          }
           contentContainerStyle={[styles.listContent, { paddingBottom: 90 + insets.bottom }]}
           renderSectionHeader={({ section }) => (
             <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>

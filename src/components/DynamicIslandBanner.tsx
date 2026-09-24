@@ -34,6 +34,7 @@ export default function DynamicIslandBanner() {
   const { wallets } = useWalletStore();
   const {
     activeBannerItem,
+    pendingList,
     confirmPending,
     dismissPending,
     dismissBanner,
@@ -174,6 +175,11 @@ export default function DynamicIslandBanner() {
                 <Text style={[styles.amountText, { color: amountColor }]} numberOfLines={1}>
                   {amountPrefix}{formatCurrency(activeBannerItem.amount, currency)}
                 </Text>
+                {pendingList.length > 1 && (
+                  <View style={styles.queueBadge}>
+                    <Text style={styles.queueBadgeText}>1/{pendingList.length}</Text>
+                  </View>
+                )}
                 {isConfident ? (
                   <View style={[styles.categoryTag, { backgroundColor: `${currentCategory.color}25` }]}>
                     <MaterialCommunityIcons
@@ -493,6 +499,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
+  },
+  queueBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.25)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+  },
+  queueBadgeText: {
+    color: '#60A5FA',
+    fontSize: 9,
+    fontWeight: '800',
   },
   categoryTag: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
+import Constants from 'expo-constants';
 import { usePendingTransactionStore } from '../stores/pendingTransactionStore';
 
 export const SEPAY_NOTIFICATION_CHANNEL_ID = 'sepay_transactions';
@@ -12,13 +13,20 @@ try {
 
   if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
+      handleNotification: async () => {
+        // Tham khảo cơ chế của Telegram, MoMo, Revolut:
+        // Khi người dùng đang tương tác trong ứng dụng (Foreground/Active),
+        // KHÔNG thả Heads-up alert banner của hệ điều hành xuống để tránh xung đột
+        // và đè lên thanh Dynamic Island của App!
+        const isAppActive = AppState.currentState === 'active';
+        return {
+          shouldShowAlert: !isAppActive,
+          shouldPlaySound: !isAppActive,
+          shouldSetBadge: true,
+          shouldShowBanner: !isAppActive,
+          shouldShowList: true, // Vẫn lưu lại trên ngăn kéo thông báo hệ thống
+        };
+      },
     });
   }
 } catch (err) {
@@ -56,13 +64,63 @@ export async function initSystemNotifications(): Promise<void> {
           if (item) {
             usePendingTransactionStore.setState({ activeBannerItem: item });
           }
+        } else if (
+          data &&
+          (data.transferAmount || data.amount_out || data.amount_in || data.content || data.referenceCode)
+        ) {
+          // Xử lý gói tin Webhook đẩy trực tiếp qua Push Notification (Realtime khi đóng app!)
+          const { processSepayWebhookPayload } = require('./sepayService');
+          const res = processSepayWebhookPayload(data);
+          if (res?.item) {
+            usePendingTransactionStore.setState({ activeBannerItem: res.item });
+          }
         }
       } catch (err) {
         console.warn('[SystemNotification] Failed to handle notification tap:', err);
       }
     });
+
+    // Handle when push notification arrives while app is open
+    Notifications.addNotificationReceivedListener((notification) => {
+      try {
+        const data = notification.request.content.data;
+        if (
+          data &&
+          (data.transferAmount || data.amount_out || data.amount_in || data.content || data.referenceCode)
+        ) {
+          const { processSepayWebhookPayload } = require('./sepayService');
+          processSepayWebhookPayload(data);
+        }
+      } catch (err) {
+        console.warn('[SystemNotification] Failed to handle notification received:', err);
+      }
+    });
   } catch (err) {
     console.warn('[SystemNotification] Failed to initialize notification channels:', err);
+  }
+}
+
+/**
+ * Get device Expo Push Token for receiving realtime SePay Webhooks
+ */
+export async function getExpoPushToken(): Promise<string | null> {
+  if (!Notifications) return null;
+  try {
+    const hasPermission = await requestSystemNotificationPermission();
+    if (!hasPermission) return null;
+
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      Constants?.easConfig?.projectId ??
+      '2fd4e952-e87c-4b24-bacb-6ccbdd89e412';
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
+    return tokenData.data;
+  } catch (err) {
+    console.warn('[SystemNotification] Failed to get Expo push token:', err);
+    return null;
   }
 }
 
@@ -136,3 +194,58 @@ export async function sendSystemTransactionNotification(item: {
     console.warn('[SystemNotification] Failed to schedule notification:', err);
   }
 }
+
+/**
+ * Gửi thông báo hệ thống thông minh (Smart Notifications):
+ * - Nếu App đang mở (Foreground / Active): Không gửi alert hệ thống vì Dynamic Island trong app đã xử lý xuất sắc.
+ * - Nếu App đang tắt hoặc chạy nền (Background): Bắn thông báo ra màn hình khóa & status bar.
+ * - Nếu có nhiều giao dịch (> 1): Gom nhóm (batch) thành 1 thông báo tóm tắt thay vì spam nhiều lần.
+ */
+export async function sendSystemTransactionNotifications(
+  items: Array<{
+    bankName: string;
+    amount: number;
+    type: 'EXPENSE' | 'INCOME';
+    note: string;
+    id?: string;
+  }>
+): Promise<void> {
+  if (!Notifications || !items || items.length === 0) return;
+
+  // Nếu người dùng đang mở app, không bắn notification hệ thống để tránh trùng lặp với Dynamic Island
+  if (AppState.currentState === 'active') {
+    return;
+  }
+
+  try {
+    if (items.length === 1) {
+      await sendSystemTransactionNotification(items[0]);
+    } else {
+      // Gom nhóm nhiều giao dịch
+      const count = items.length;
+      const totalAmount = items.reduce((sum, i) => sum + (i.amount || 0), 0);
+      const title = `🔔 Phát hiện ${count} biến động số dư ngân hàng mới`;
+      const body = `Tổng cộng ~${formatAmount(totalAmount)} • Chạm để mở ứng dụng và xác nhận ghi sổ`;
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { pendingId: items[0].id },
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          ...(Platform.OS === 'android'
+            ? {
+                channelId: SEPAY_NOTIFICATION_CHANNEL_ID,
+                color: '#3B82F6',
+              }
+            : {}),
+        },
+        trigger: null,
+      });
+    }
+  } catch (err) {
+    console.warn('[SystemNotification] Failed to schedule batch notifications:', err);
+  }
+}
+

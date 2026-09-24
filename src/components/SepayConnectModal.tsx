@@ -29,6 +29,7 @@ import {
   processSepayWebhookPayload,
   SAMPLE_SEPAY_WEBHOOK,
 } from '../services/sepayService';
+import { getExpoPushToken } from '../services/systemNotificationService';
 
 interface SepayConnectModalProps {
   visible: boolean;
@@ -52,6 +53,7 @@ export default function SepayConnectModal({
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [configured, setConfigured] = useState(false);
+  const [pushToken, setPushToken] = useState<string | null>(null);
 
   // Webhook JSON test input
   const [webhookJsonInput, setWebhookJsonInput] = useState(
@@ -65,8 +67,21 @@ export default function SepayConnectModal({
       setConfigured(isSepayConfigured());
       setAutoSync(isSepayAutoSyncEnabled());
       setLastSynced(getSepayLastSyncedAt());
+
+      getExpoPushToken().then((tok) => {
+        if (tok) setPushToken(tok);
+      });
     }
   }, [visible]);
+
+  const handleCopyPushToken = async () => {
+    if (!pushToken) {
+      Alert.alert('Chưa có mã', 'Đang tạo Push Token cho thiết bị, vui lòng thử lại sau vài giây.');
+      return;
+    }
+    await Clipboard.setStringAsync(pushToken);
+    Alert.alert('Đã sao chép', 'Mã Push Token của máy đã được sao chép vào bộ nhớ tạm.');
+  };
 
   const handlePasteFromClipboard = async () => {
     try {
@@ -173,11 +188,7 @@ export default function SepayConnectModal({
 
     const result = processSepayWebhookPayload(freshSample);
     if (result.success && result.item) {
-      onClose(); // Close modal so Dynamic Island pops into view!
-      Alert.alert(
-        '⚡ Webhook SePay Đã Kích Hoạt!',
-        `Nhận diện giao dịch ${result.item.bankName}: ${result.item.amount.toLocaleString()} đ (${result.item.note}).\n\nThanh Dynamic Island Banner đã xuất hiện ở trên cùng màn hình!`
-      );
+      onClose(); // Đóng modal để thanh Dynamic Island Banner lập tức trượt xuống và tương tác trực tiếp!
     } else {
       Alert.alert('Lỗi Webhook', result.reason || 'Không thể xử lý payload.');
     }
@@ -366,10 +377,10 @@ export default function SepayConnectModal({
                 <View style={[styles.switchRow, { backgroundColor: theme.surfaceVariant }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={[styles.switchTitle, { color: theme.textPrimary }]}>
-                      Tự động đồng bộ khi mở ứng dụng
+                      Tự động đồng bộ định kỳ (SePay API)
                     </Text>
                     <Text style={[styles.switchDesc, { color: theme.textSecondary }]}>
-                      Tự động kiểm tra và kéo biến động mới nhất từ ngân hàng
+                      Tự động kéo dữ liệu khi mở app và chạy ngầm (15-30 phút/lần). Muốn nhận thông báo Realtime tức thì 1 giây khi đóng app, xem tab Webhook.
                     </Text>
                   </View>
                   <Switch
@@ -461,31 +472,56 @@ export default function SepayConnectModal({
               </>
             ) : (
               <>
-                {/* SePay Webhook Info */}
+                {/* Realtime Webhook Info */}
                 <View
                   style={[
                     styles.guideCard,
-                    { backgroundColor: theme.surfaceVariant, borderColor: '#10B98140', borderWidth: 1 },
+                    { backgroundColor: theme.surfaceVariant, borderColor: '#10B98150', borderWidth: 1 },
                   ]}
                 >
                   <View style={styles.guideHeader}>
-                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#10B981" />
-                    <Text style={[styles.guideTitle, { color: '#10B981' }]}>
-                      NGUYÊN LÝ HOẠT ĐỘNG CỦA SEPAY WEBHOOK
+                    <MaterialCommunityIcons name="lightning-bolt" size={20} color="#10B981" />
+                    <Text style={[styles.guideTitle, { color: '#10B981', fontSize: 13 }]}>
+                      NHẬN THÔNG BÁO TỨC THÌ KHI ĐÓNG APP (REALTIME 1-2S)
                     </Text>
                   </View>
                   <Text style={[styles.stepText, { color: theme.textSecondary, marginBottom: 8 }]}>
-                    Khi có biến động số dư ngân hàng, SePay gửi một gói tin HTTP POST (JSON) chứa thông tin giao dịch (Số tiền, Ngân hàng, Nội dung, Loại Thu/Chi).
+                    Khi bạn đóng ứng dụng hoàn toàn hoặc khóa màn hình, SePay Webhook kết hợp với Push Notification sẽ gửi cảnh báo "Ting ting" đến điện thoại ngay trong 1-2 giây sau khi tài khoản ngân hàng có biến động!
                   </Text>
                   <Text style={[styles.stepText, { color: theme.textSecondary }]}>
-                    • Ứng dụng tự động bóc tách và phân loại danh mục thông minh.{'\n'}
-                    • Thanh <Text style={{ fontWeight: '700', color: theme.textPrimary }}>Dynamic Island Banner</Text> sẽ lập tức nổi lên màn hình để bạn xác nhận với 1 chạm!
+                    • Chạm vào thông báo trên màn hình khóa ➔ App mở ra và tự động ghi chép.{'\n'}
+                    • Thanh <Text style={{ fontWeight: '700', color: theme.textPrimary }}>Dynamic Island</Text> xuất hiện tức thì với danh mục đề xuất thông minh!
                   </Text>
+                </View>
+
+                {/* Device Push Token Section */}
+                <Text style={[styles.inputLabel, { color: theme.textSecondary, marginTop: 8 }]}>
+                  MÃ PUSH TOKEN CỦA THIẾT BỊ NÀY (ĐỂ NHẬN TIN REALTIME)
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    { backgroundColor: theme.inputBackground, borderColor: theme.border },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.input, { color: theme.textPrimary, fontSize: 12 }]}
+                    value={pushToken || 'Đang tạo mã định danh thiết bị...'}
+                    editable={false}
+                    selectTextOnFocus
+                  />
+                  <TouchableOpacity
+                    onPress={handleCopyPushToken}
+                    style={[styles.pasteBtn, { backgroundColor: '#10B98125' }]}
+                  >
+                    <MaterialCommunityIcons name="content-copy" size={14} color="#10B981" />
+                    <Text style={[styles.pasteBtnText, { color: '#10B981' }]}>Sao chép</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* 1-Touch Webhook Sample Test */}
                 <TouchableOpacity
-                  style={[styles.testCard, { backgroundColor: '#10B98115', borderColor: '#10B98150' }]}
+                  style={[styles.testCard, { backgroundColor: '#10B98115', borderColor: '#10B98150', marginTop: 12 }]}
                   onPress={handleTestWebhookSample}
                   activeOpacity={0.8}
                 >
